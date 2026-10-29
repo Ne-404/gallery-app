@@ -1,5 +1,5 @@
-import { router } from 'expo-router';
-import { useState } from 'react';
+import { router, useNavigation } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import { BlurView } from 'expo-blur';
 import {
   ActivityIndicator,
@@ -27,6 +27,7 @@ import { BottomTabInset, Spacing } from '@/constants/theme';
 import { useAppWidth } from '@/hooks/use-app-width';
 import { useAccent, useGallery } from '@/hooks/use-gallery';
 import { useTheme } from '@/hooks/use-theme';
+import { loadLibrary } from '@/lib/media';
 import { scopeItems } from '@/lib/scopes';
 import { setNote } from '@/lib/user-data';
 
@@ -52,6 +53,16 @@ export default function HomeScreen() {
   const [saveItem, setSaveItem] = useState<string | null>(null);
   const [menuItem, setMenuItem] = useState<string | null>(null);
   const [scrolled, setScrolled] = useState(false);
+  // Tapping the Home tab while already on Home scrolls the feed back to the top.
+  const feed = useRef<FlatList>(null);
+  const navigation = useNavigation();
+  useEffect(
+    () =>
+      navigation.addListener('tabPress' as never, () => {
+        if (navigation.isFocused()) feed.current?.scrollToOffset({ offset: 0, animated: true });
+      }),
+    [navigation]
+  );
   // Multi-select happens in the grid; starting it from the feed switches to the grid.
   const [gridSelecting, setGridSelecting] = useState(false);
   const [selectSeed, setSelectSeed] = useState<{ id: string; n: number } | null>(null);
@@ -161,16 +172,22 @@ export default function HomeScreen() {
             header={listHeader}
             onScroll={onScroll}
             key={selectSeed ? `select-${selectSeed.n}` : 'grid'}
+            onRefresh={loadLibrary}
+            refreshing={library.status === 'loading'}
             initialSelected={selectSeed ? [selectSeed.id] : undefined}
             onSelectingChange={setGridSelecting}
           />
         ) : (
           <FlatList
+            ref={feed}
             data={items.slice(0, visibleCount)}
             keyExtractor={(item) => item.id}
             extraData={data}
             ListHeaderComponent={listHeader}
             contentContainerStyle={styles.feed}
+            // Pull down to rescan the photo library.
+            onRefresh={loadLibrary}
+            refreshing={library.status === 'loading' && library.items.length > 0}
             onScroll={onScroll}
             scrollEventThrottle={32}
             onEndReached={() => setVisibleCount((c) => Math.min(c + PAGE_SIZE, items.length))}

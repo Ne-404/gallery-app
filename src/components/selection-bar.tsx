@@ -12,7 +12,9 @@ import { useTheme } from '@/hooks/use-theme';
 import { deleteFromDevice } from '@/lib/media';
 import type { Scope } from '@/lib/scopes';
 import { shareItems } from '@/lib/share';
+import { showToast } from '@/lib/toast';
 import { confirmAction } from '@/lib/ui';
+import { isVaultScope } from '@/lib/vault';
 import { copyItem, forgetItems, likeItems, restoreItems, trashItems } from '@/lib/user-data';
 
 type SelectionBarProps = {
@@ -48,6 +50,7 @@ export function SelectionBar({ selected, scope, allIds, onChange }: SelectionBar
             icon: { ios: 'arrow.uturn.backward', android: 'restore' },
             onPress: () => {
               restoreItems(selected);
+              showToast(`Restored ${count}`);
               done();
             },
           },
@@ -77,6 +80,7 @@ export function SelectionBar({ selected, scope, allIds, onChange }: SelectionBar
             color: LikeColor,
             onPress: () => {
               likeItems(selected);
+              showToast(`Added ${count} to favorites`);
               done();
             },
           },
@@ -91,6 +95,7 @@ export function SelectionBar({ selected, scope, allIds, onChange }: SelectionBar
             icon: { ios: 'plus.square.on.square', android: 'content_copy' },
             onPress: () => {
               selected.forEach(copyItem);
+              showToast(count === 1 ? 'Copy made' : `${count} copies made`);
               done();
             },
           },
@@ -99,7 +104,17 @@ export function SelectionBar({ selected, scope, allIds, onChange }: SelectionBar
             icon: { ios: 'trash', android: 'delete' },
             color: '#E5484D',
             onPress: () => {
+              if (isVaultScope(scope)) {
+                confirmAction(`Delete ${count} from vault?`, 'Vault photos are deleted permanently.', 'Delete', async () => {
+                  done();
+                  await deleteFromDevice(selected);
+                  forgetItems(selected);
+                });
+                return;
+              }
               trashItems(selected);
+              const trashed = selected;
+              showToast(`${count} moved to Recently deleted`, { label: 'Undo', onPress: () => restoreItems(trashed) });
               done();
             },
           },

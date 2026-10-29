@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppBar } from '@/components/app-bar';
 import { Icon } from '@/components/icon';
-import { LibraryBanner } from '@/components/library-banner';
+import { libraryNotice } from '@/components/library-banner';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import {
@@ -15,16 +15,19 @@ import {
   type AccentName,
 } from '@/constants/theme';
 import { useAccent, useGallery } from '@/hooks/use-gallery';
+import { useTheme } from '@/hooks/use-theme';
 import { Challenges } from '@/lib/challenges';
-import { loadLibrary, requestLibraryAccess, switchToDemoLibrary } from '@/lib/media';
+import { loadLibrary, switchToDemoLibrary } from '@/lib/media';
 import { notificationsSupported, setReminder } from '@/lib/notifications';
 import { confirmAction, openSidePanel } from '@/lib/ui';
 import { resetUserData, updateSettings } from '@/lib/user-data';
 
 export default function SettingsScreen() {
-  const { library, data, unlocked, vaultCount } = useGallery();
+  const { library, data, unlocked, itemCount, vaultCount } = useGallery();
   const accent = useAccent();
+  const theme = useTheme();
   const { settings } = data;
+  const notice = libraryNotice(library);
 
   const toggleReminder = async (kind: 'memoryReminders' | 'challengeReminders', value: boolean) => {
     const ok = await setReminder(kind, value, null);
@@ -62,17 +65,24 @@ export default function SettingsScreen() {
 
           <Section title="LIBRARY">
             <Row label="Source" value={library.source === 'device' ? 'Camera roll' : 'Demo media'} />
-            <Row label="Items" value={String(library.items.length)} />
+            <Row label="Items" value={String(itemCount)} />
             {library.source === 'device' ? (
               <>
                 <Button label="Rescan library" onPress={loadLibrary} color={accent} />
                 <Button label="Switch to demo media" onPress={switchToDemoLibrary} color={accent} />
               </>
             ) : (
-              <Button label="Use my camera roll" onPress={requestLibraryAccess} color={accent} />
+              // The camera roll button only shows where it can work (not on web or in Expo Go).
+              notice && (
+                <>
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.noticeText}>
+                    {notice.message}
+                  </ThemedText>
+                  {notice.action && <Button label={notice.action.label} onPress={notice.action.onPress} color={accent} />}
+                </>
+              )
             )}
           </Section>
-          <LibraryBanner />
 
           <Section title="PRIVACY">
             <Toggle
@@ -91,13 +101,13 @@ export default function SettingsScreen() {
                 ['minimal', 'Gallery player', 'Clean and minimal: tap to play or pause'],
                 ['external', 'Another app', 'Open videos in VLC, MX Player, Photos…'],
               ] as const
-            ).map(([id, label, hint]) => (
+            ).map(([id, label, hint], i) => (
               <Pressable
                 key={id}
                 accessibilityRole="radio"
                 accessibilityState={{ checked: settings.videoPlayer === id }}
                 onPress={() => updateSettings({ videoPlayer: id })}
-                style={styles.row}>
+                style={[styles.row, styles.option, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: theme.border }]}>
                 <View style={styles.flex}>
                   <ThemedText>{label}</ThemedText>
                   <ThemedText type="small" themeColor="textSecondary">
@@ -319,6 +329,14 @@ const styles = StyleSheet.create({
   },
   note: {
     paddingTop: Spacing.three,
+  },
+  // Two-line choices need room: padding and a divider tell them apart.
+  option: {
+    gap: Spacing.three,
+    paddingVertical: Spacing.three,
+  },
+  noticeText: {
+    paddingBottom: Spacing.two,
   },
   pressed: {
     opacity: 0.6,

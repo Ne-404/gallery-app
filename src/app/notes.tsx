@@ -16,12 +16,12 @@ import { NOTE_COLORS, noteEntries, parseLines, type NoteEntry } from '@/lib/note
 
 /** Notes app: freestanding notes and photo notes together, searchable, pinned first. */
 export default function NotesScreen() {
-  const { data, itemsById } = useGallery();
+  const { data, itemsById, isVaulted } = useGallery();
   const accent = useAccent();
   const theme = useTheme();
   const [query, setQuery] = useState('');
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-  const entries = noteEntries(data).filter((e) => {
+  const entries = noteEntries(data, isVaulted).filter((e) => {
     const text = `${e.title}\n${e.body}`.toLowerCase();
     return words.every((w) => text.includes(w));
   });
@@ -60,14 +60,14 @@ export default function NotesScreen() {
             <View style={styles.empty}>
               <Icon ios="note.text" android="sticky_note_2" size={44} color={theme.textSecondary} />
               <ThemedText themeColor="textSecondary" style={styles.center}>
-                {query ? 'No notes match.' : 'No notes yet. Tap + to write one, or add a note to any photo.'}
+                {query ? 'No notes match.' : 'No notes yet. Tap the pencil to write one, or add a note to any photo.'}
               </ThemedText>
             </View>
           }
           renderItem={({ item: entry }) => {
             const tint = entry.kind === 'journal' ? NOTE_COLORS[entry.note.color] : null;
             const photoId = entry.kind === 'photo' ? entry.itemId : entry.note.itemIds[0];
-            const photo = photoId ? itemsById.get(photoId) : undefined;
+            const photo = photoId && !isVaulted(photoId) ? itemsById.get(photoId) : undefined;
             const lines = parseLines(entry.body).filter((l) => l.text.trim()).slice(0, 5);
             return (
               <Pressable onPress={() => open(entry)} style={({ pressed }) => [styles.cell, pressed && styles.pressed]}>

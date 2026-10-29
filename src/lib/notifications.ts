@@ -62,7 +62,10 @@ export const useNotificationDeepLinks = Notifications
         if (!response) return;
         if (response.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) return;
         const { url } = response.notification.request.content.data as NotificationData;
-        if (url) router.navigate(url as Parameters<typeof router.navigate>[0]);
+        // Only in-app paths: never follow anything that could leave the app.
+        if (typeof url === 'string' && url.startsWith('/') && !url.startsWith('//')) {
+          router.navigate(url as Parameters<typeof router.navigate>[0]);
+        }
         Notifications.clearLastNotificationResponse();
       }, [response]);
     }

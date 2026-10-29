@@ -34,7 +34,7 @@ export function SidePanel({
   open: boolean;
   gallery: ReturnType<typeof useGallery>;
 }) {
-  const { library, data, challenges, reels } = gallery;
+  const { data, challenges, reels, itemCount } = gallery;
   const accent = useAccent();
   const theme = useTheme();
   const root = useRef<ComponentRef<typeof View>>(null);
@@ -160,7 +160,7 @@ export function SidePanel({
             <View style={styles.headerText}>
               <ThemedText style={[styles.brand, theme.serif && styles.brandGothic]}>Gallery</ThemedText>
               <ThemedText type="small" themeColor="textSecondary">
-                {library.items.length} items · {wheel.label} theme
+                {itemCount} items · {wheel.label} theme
               </ThemedText>
             </View>
             {wheel.trigger}

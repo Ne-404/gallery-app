@@ -76,7 +76,8 @@ export function ReelPlayer({
       ) : (
         <Animated.View style={[StyleSheet.absoluteFill, zoomStyle]}>
           <Image
-            source={{ uri: item.uri }}
+            // Full-screen for a few seconds: the feed-sized preview is plenty and loads far faster.
+            source={{ uri: item.previewUri ?? item.uri }}
             placeholder={{ uri: item.thumbUri }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"

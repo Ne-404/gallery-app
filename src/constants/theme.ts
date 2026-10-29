@@ -51,6 +51,24 @@ export const Colors = {
     textSecondary: '#2A2A2A',
     border: '#111111',
   },
+  /** Windows 98: silver windows on a teal desktop, beveled edges, navy selection. */
+  win98: {
+    text: '#000000',
+    background: '#C0C0C0',
+    backgroundElement: '#DFDFDF',
+    backgroundSelected: '#A6CAF0',
+    textSecondary: '#404040',
+    border: '#808080',
+  },
+  /** Windows 98 "High Contrast Black": white type and outlines on black, cyan highlights. */
+  contrast: {
+    text: '#FFFFFF',
+    background: '#000000',
+    backgroundElement: '#000000',
+    backgroundSelected: '#800080',
+    textSecondary: '#C0C0C0',
+    border: '#FFFFFF',
+  },
 } as const;
 
 export type ThemeName = keyof typeof Colors;
@@ -69,12 +87,14 @@ type ThemeTokens = {
   accent: string | undefined;
   /** Color behind the phone frame on desktop browsers. */
   desk: string;
+  /** Windows 98 look: Tahoma type, near-square corners, a taskbar-style tab bar. */
+  retro: boolean;
 };
 
 /** Non-color tokens per theme. */
 export const ThemeStyles: Record<ThemeName, ThemeTokens> = {
-  light: { brutal: false, dark: false, outline: 0, shadow: undefined, serif: false, accent: undefined, desk: '#E9EBEF' },
-  dark: { brutal: false, dark: true, outline: 0, shadow: undefined, serif: false, accent: undefined, desk: '#111214' },
+  light: { brutal: false, dark: false, outline: 0, shadow: undefined, serif: false, accent: undefined, desk: '#E9EBEF', retro: false },
+  dark: { brutal: false, dark: true, outline: 0, shadow: undefined, serif: false, accent: undefined, desk: '#111214', retro: false },
   brutal: {
     brutal: true,
     dark: false,
@@ -83,6 +103,7 @@ export const ThemeStyles: Record<ThemeName, ThemeTokens> = {
     serif: false,
     accent: undefined,
     desk: '#FFD23F',
+    retro: false,
   },
   gothic: {
     brutal: false,
@@ -92,6 +113,7 @@ export const ThemeStyles: Record<ThemeName, ThemeTokens> = {
     serif: true,
     accent: '#A4161A',
     desk: '#1A0A0A',
+    retro: false,
   },
   pop: {
     brutal: true,
@@ -101,6 +123,28 @@ export const ThemeStyles: Record<ThemeName, ThemeTokens> = {
     serif: false,
     accent: '#E4002B',
     desk: '#3EC6F0',
+    retro: false,
+  },
+  win98: {
+    brutal: false,
+    dark: false,
+    outline: 1,
+    // Raised bevel: light top-left edge, dark bottom-right edge.
+    shadow: 'inset 1px 1px 0px #FFFFFF, inset -1px -1px 0px #808080, 1px 1px 0px #000000',
+    serif: false,
+    accent: '#000080',
+    desk: '#008080',
+    retro: true,
+  },
+  contrast: {
+    brutal: false,
+    dark: true,
+    outline: 2,
+    shadow: undefined,
+    serif: false,
+    accent: '#00FFFF',
+    desk: '#000000',
+    retro: true,
   },
 };
 
@@ -114,6 +158,8 @@ export const Appearances: { id: Appearance; label: string; swatch: [string, stri
   { id: 'brutal', label: 'Brutal', swatch: ['#FFF4D6', '#FFD23F'] },
   { id: 'gothic', label: 'Blood Moon', swatch: ['#0B0908', '#A4161A'] },
   { id: 'pop', label: 'Pop Art', swatch: ['#FFE94A', '#E4002B'] },
+  { id: 'win98', label: 'Windows 98', swatch: ['#C0C0C0', '#000080'] },
+  { id: 'contrast', label: 'High Contrast', swatch: ['#000000', '#00FFFF'] },
 ];
 
 /** App accent themes. Everything except `classic` is unlocked by completing challenges. */
@@ -139,18 +185,21 @@ export const Fonts = Platform.select({
     rounded: 'ui-rounded',
     /** iOS `UIFontDescriptorSystemDesignMonospaced` */
     mono: 'ui-monospace',
+    retro: 'Verdana',
   },
   default: {
     sans: 'normal',
     serif: 'serif',
     rounded: 'normal',
     mono: 'monospace',
+    retro: 'sans-serif',
   },
   web: {
     sans: 'var(--font-display)',
     serif: 'var(--font-serif)',
     rounded: 'var(--font-rounded)',
     mono: 'var(--font-mono)',
+    retro: 'var(--font-retro)',
   },
 });
 

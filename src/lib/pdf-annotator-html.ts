@@ -14,7 +14,13 @@ export function pdfAnnotatorHtml() {
 <html><head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<!-- The page only ever talks to cdnjs (pdf.js), so even a hostile PDF can't send a document anywhere.
+     The policy also binds the blob: worker below. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com blob:; worker-src blob:; connect-src https://cdnjs.cloudflare.com; style-src 'unsafe-inline'; img-src data: blob:; font-src data: blob:; base-uri 'none'; form-action 'none'" />
+<!-- Integrity-pinned: the browser refuses the script if the CDN copy was altered. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"
+  integrity="sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e"
+  crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; height: 100%; background: #2b2b2f; font-family: -apple-system, system-ui, Roboto, sans-serif; }
@@ -201,19 +207,40 @@ export function pdfAnnotatorHtml() {
     if (n >= 1 && n <= state.pages.length) state.pages[n - 1].el.scrollIntoView();
   };
 
+  // The worker parses every PDF, so it's integrity-pinned like pdf.min.js. workerSrc can't
+  // carry an integrity attribute, so it's fetched with one and run from a blob: URL.
+  var workerUrl = null;
+  async function verifiedWorker() {
+    if (!workerUrl) {
+      var res = await fetch('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js', {
+        integrity: 'sha512-BbrZ76UNZq5BhH7LL7pn9A4TKQpQeNCHOo65/akfelcIBbcVvYWOFQKPXIrykE3qZxYjmDX573oa4Ywsc7rpTw==',
+        credentials: 'omit',
+      });
+      if (!res.ok) throw new Error('Worker unavailable');
+      workerUrl = URL.createObjectURL(new Blob([await res.text()], { type: 'text/javascript' }));
+    }
+    return workerUrl;
+  }
+
   async function load(msg) {
     document.documentElement.style.setProperty('--accent', msg.accent || '#3c87f7');
     state.ann = msg.annotations || {};
+    if (msg.tooLarge) {
+      pagesEl.innerHTML = '<div id="status">This PDF is too large to open here.</div>';
+      return;
+    }
     if (!msg.base64) {
       pagesEl.innerHTML = '<div id="status">This PDF isn’t on this device anymore.<br/>Delete it from the list and import it again.</div>';
       return;
     }
     try {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      pdfjsLib.GlobalWorkerOptions.workerSrc = await verifiedWorker();
       var raw = atob(msg.base64);
       var bytes = new Uint8Array(raw.length);
       for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-      var pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+      // isEvalSupported: false blocks the font-compilation path behind CVE-2024-4367, where a
+      // crafted PDF could run its own script inside the reader.
+      var pdf = await pdfjsLib.getDocument({ data: bytes, isEvalSupported: false }).promise;
       pagesEl.innerHTML = '';
       var width = Math.min(pagesEl.clientWidth - 20, 900);
       var dpr = Math.min(window.devicePixelRatio || 1, 2);

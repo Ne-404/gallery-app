@@ -116,7 +116,7 @@ export const PostCard = memo(function PostCard({
           theme.brutal && { borderTopWidth: theme.outline, borderBottomWidth: theme.outline, borderColor: theme.border },
         ]}>
         <EditedImage
-          uri={item.type === 'video' ? item.thumbUri : item.uri}
+          uri={item.type === 'video' ? item.thumbUri : (item.previewUri ?? item.uri)}
           placeholderUri={item.thumbUri}
           edit={edit}
           sourceAspect={item.width / item.height}

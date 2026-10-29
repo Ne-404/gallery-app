@@ -2,7 +2,7 @@ import { AppState } from 'react-native';
 
 import { createStore } from '@/lib/create-store';
 import type { Scope } from '@/lib/scopes';
-import { checkVaultPasscode, type UserData } from '@/lib/user-data';
+import { checkVaultPasscode, clearVaultFailures, type UserData } from '@/lib/user-data';
 
 /**
  * Whether the vault is unlocked for this session. Never persisted: the vault locks again
@@ -12,14 +12,18 @@ const unlocked = createStore(false);
 
 export const useVaultUnlocked = unlocked.use;
 
-/** Returns true when the passcode was right and the vault is now open. */
+/** Tries a passcode; 'locked' means too many wrong attempts (see `vaultLockoutSeconds`). */
 export function unlockVault(passcode: string) {
-  const ok = checkVaultPasscode(passcode);
-  if (ok) unlocked.set(true);
-  return ok;
+  const result = checkVaultPasscode(passcode);
+  if (result === 'ok') unlocked.set(true);
+  return result;
 }
 
-export const openVault = () => unlocked.set(true);
+/** Opens the vault after another proof of ownership (fingerprint, or a new passcode). */
+export function openVault() {
+  clearVaultFailures();
+  unlocked.set(true);
+}
 export const lockVault = () => unlocked.set(false);
 
 AppState.addEventListener('change', (state) => {

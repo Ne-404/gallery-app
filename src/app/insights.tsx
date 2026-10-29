@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppBar } from '@/components/app-bar';
@@ -58,9 +58,9 @@ export default function InsightsScreen() {
               CONSISTENCY & MEMORIES
             </ThemedText>
             <View style={styles.streaks}>
-              <Stat value={insights.captureStreak} label="day capture streak" />
-              <Stat value={insights.openStreak} label="day app streak" />
-              <Stat value={insights.activeDays} label="active days (12 wks)" />
+              <Stat value={insights.captureStreak} label="day capture streak" style={styles.streak} />
+              <Stat value={insights.openStreak} label="day app streak" style={styles.streak} />
+              <Stat value={insights.activeDays} label="active days (12 wks)" style={styles.streak} />
             </View>
             <View style={styles.heatmap}>
               {Array.from({ length: 12 }, (_, week) => (
@@ -141,9 +141,9 @@ function Card({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Stat({ value, label }: { value: number | string; label: string }) {
+function Stat({ value, label, style }: { value: number | string; label: string; style?: ViewStyle }) {
   return (
-    <View style={styles.stat}>
+    <View style={[styles.stat, style]}>
       <ThemedText style={styles.statValue}>{value}</ThemedText>
       <ThemedText type="small" themeColor="textSecondary">
         {label}
@@ -254,7 +254,12 @@ const styles = StyleSheet.create({
   },
   streaks: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: Spacing.three,
+  },
+  // Equal thirds, so long labels wrap instead of running into the next one.
+  streak: {
+    flex: 1,
+    minWidth: 0,
   },
   heatmap: {
     flexDirection: 'row',

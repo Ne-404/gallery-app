@@ -49,7 +49,8 @@ Known pre-existing lint error: `react-hooks/set-state-in-effect` in `src/hooks/u
   - Pinch any `MediaGrid` to change its column count (ctrl+wheel on web).
   - All gestures use react-native-gesture-handler **v3 hooks** (`usePinchGesture`, `usePanGesture`, …). Their callbacks are worklets that call JS through `scheduleOnRN` from `react-native-worklets`. A function captured by a worklet must be declared before the gesture hook.
 - **Side panel** open state is plain React state in the root layout (`registerSidePanel` / `openSidePanel` in `lib/ui.ts`). Don't move it to a `createStore` store: that caused "change in the order of Hooks" crashes on web.
-- Use `confirmAction` (`lib/ui.ts`) for yes/no prompts, because RN Web's `Alert.alert` does nothing.
+- Use `confirmAction` (`lib/ui.ts`) for yes/no prompts, because RN Web's `Alert.alert` does nothing. Use `showToast(message, { label: 'Undo', onPress })` (`lib/toast.ts`, rendered by `ToastHost`) to confirm actions.
+- Notification deep links only accept in-app paths (`/…`).
 
 ### State and derived data
 
@@ -74,7 +75,10 @@ Known pre-existing lint error: `react-hooks/set-state-in-effect` in `src/hooks/u
 - Always render photos through `components/edited-image.tsx` and pass `sourceAspect`. It only measures itself (the "precise" path) when a crop, turn, straighten, text or drawing needs it.
 - **Saving in the editor creates a virtual copy** (`copyItem`; copy ids contain `#copy-`); editing a copy updates it in place. Originals are never modified.
 - **Vault:** everything in a `collection` is hidden from the rest of the app behind a passcode.
-  - The passcode is stored as a salted hash using `lib/sha256.ts`, a pure-JS hash, because Web Crypto is missing on plain-http LAN URLs.
+  - The passcode is stored as a salted hash, iterated 3000 rounds, using `lib/sha256.ts`, a pure-JS hash, because Web Crypto is missing on plain-http LAN URLs. Old single-round hashes upgrade on unlock.
+  - After 5 wrong attempts, each further miss locks entry for an escalating, persisted time (`checkVaultPasscode` returns `'ok' | 'wrong' | 'locked'`).
+  - Vault items must not leak: use `isVaulted(id)` from `useGallery()` anywhere an item could surface by id (notes, attachments, avatar, editor deep links). `trash` excludes them, and deleting a vault item is permanent.
+  - The vault hides photos; it doesn't encrypt them (user data is plain JSON in storage).
   - The unlock state (`lib/vault.ts`) is session-only.
   - `album` and `viewer` redirect to `/vault` for vault scopes while it's locked.
   - Fingerprint unlock and passcode recovery come from `lib/biometrics.ts`.
@@ -85,25 +89,33 @@ Known pre-existing lint error: `react-hooks/set-state-in-effect` in `src/hooks/u
 - **Sharing** uses the system share sheet. On device, edited photos are first rendered to a JPEG by `ExportHost` (react-native-view-shot, driven by `lib/export.ts`). The web share in `share.web.ts` sends original files via `navigator.share`, or downloads them.
 - **Viewer:**
   - `components/zoomable.tsx` handles pinch and pan; double-tap zooms and a single tap toggles the bars.
+  - A downward pan closes the viewer when not zoomed. There's also a slideshow button.
+  - Demo photos have a smaller `previewUri` for the feed, which the viewer also uses as its placeholder.
+- Recently deleted is purged after `TRASH_DAYS` (30) at startup (`purgeExpiredTrash`).
   - Videos use `settings.videoPlayer`: `builtin`, `minimal`, or `external` (`lib/external-player.ts`).
 - `PostCard` and `MediaTile` are memoized and take id-based handlers. Pass stable functions (state setters), not inline closures.
 
 ### Other features
 
 - **Stories** are user-curated (`stories`: a title plus ordered `itemIds`), not generated from dates. `lib/reels.ts` resolves them, `components/stories-row.tsx` (Profile) plays or edits them, `app/stories.tsx` plays them and `app/story.tsx` edits them. The Videos tab is a grid of every video, not stories.
-- **Music** (`(tabs)/music.tsx`) uses one global expo-audio player in `lib/music.ts`, so playback continues across screens. Tracks are imported songs, files found on the device and streamed samples. `components/vinyl.tsx` draws the spinning record.
+- **Music** (`(tabs)/music.tsx`) uses one global expo-audio player in `lib/music.ts`, so playback continues across screens. It registers lock-screen/notification controls (`setActiveForLockScreen`, which Android needs for background play). There's no next/previous there, because single players don't emit those events. `components/mini-player.tsx` shows the now-playing bar above the tab bar. Tracks are imported songs, files found on the device and streamed samples. `components/vinyl.tsx` draws the spinning record.
 - **PDF reader:** `app/pdfs.tsx` and `app/pdf.tsx`. `components/pdf-view(.web).tsx` hosts `lib/pdf-annotator-html.ts`, a pdf.js page loaded from cdnjs, so opening a PDF needs network access.
   - It runs in a WebView on device and an iframe on web, and talks to the app via postMessage.
   - Strokes are stored by `lib/pdf-annotations.ts` and the last page read in `PdfDoc.lastPage`.
   - The page is a template string, so keep inline SVG attributes single-quoted: escaped quotes break it.
+  - **Security:**
+    - pdf.js 3.11.174 is affected by CVE-2024-4367, so keep `isEvalSupported: false`.
+    - Both CDN scripts are pinned with SRI: `pdf.min.js` by its tag, the worker by a `fetch` with `integrity` run from a blob URL. Update both hashes if you change the version (cdnjs publishes them). A meta CSP limits the page to cdnjs.
+    - The device WebView blocks navigation.
+    - The web iframe is sandboxed (`allow-scripts allow-modals`), so it can't reach app storage. Its `contentDocument` is therefore null.
 - **Notes** (`app/notes.tsx`, `app/note.tsx`) merge freestanding `journal` notes with per-photo `notes` (`lib/notes.ts`). Lines starting with ☐/☑ are checklist items, • bullets and # headings.
 - **Themes:**
-  - `settings.appearance` is `system`, `light`, `dark`, `brutal`, `gothic` (Blood Moon) or `pop` (Pop Art).
-  - Adding a theme takes a `Colors` entry, `ThemeStyles` tokens (`brutal`, `dark`, `outline`, `shadow`, `serif`, `accent`, `desk`) and an `Appearances` swatch, all in `constants/theme.ts`.
+  - `settings.appearance` is `system`, `light`, `dark`, `brutal`, `gothic` (Blood Moon), `pop` (Pop Art), `win98` (Windows 98) or `contrast` (High Contrast).
+  - Adding a theme takes a `Colors` entry, `ThemeStyles` tokens (`brutal`, `dark`, `outline`, `shadow`, `serif`, `accent`, `desk`, `retro`; `retro` gives Tahoma type, square raised surfaces and a taskbar-style tab bar) and an `Appearances` swatch, all in `constants/theme.ts`.
   - Read colors via `useTheme()`/`useAccent()`, never `useColorScheme()`.
   - `ThemedView type="backgroundElement"` gets outlines automatically.
   - Themes change only through the press-and-hold wheel in the side panel (`components/theme-wheel.tsx`).
-- Icons go through `components/icon.tsx`, which takes an SF Symbol name plus a Material Symbol name. The names are type-checked.
+- Icons go through `components/icon.tsx`, which takes an SF Symbol name plus a Material Symbol name. The names are type-checked. Web draws them from an ~8 KB subset of Material Symbols (`icon.web.tsx`), so **run `npm run icons` after adding an icon**; until then a missing one falls back to the ~1 MB full font.
 
 ### Files and platform pitfalls
 
@@ -113,3 +125,4 @@ Known pre-existing lint error: `react-hooks/set-state-in-effect` in `src/hooks/u
   - **Copying:** `File.copy()` is **async** (`copySync` is the sync one). Imports use the legacy `copyAsync` first, because the new API can't read picker files in Expo Go on Android.
 - **Device scanning** (`lib/device-files.ts`) covers Android media-library audio (development builds only) and folders the user picks once (`settings.musicFolder` / `pdfFolder`). Found files are read in place, and `deleteStored` never deletes them.
 - **react-native-web `onLayout`** only attaches when a view mounts. If a view gains `onLayout` on a later render (for example after an early return), it never fires: keep it on every branch, or remount with a `key`. Horizontal `FlatList` pages also need an explicit height on web.
+- **`FlatList` with `numColumns`:** `initialNumToRender` and `maxToRenderPerBatch` count *rows*, not items. A tile count there loads the whole library at once.

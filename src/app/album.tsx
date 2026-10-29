@@ -1,4 +1,5 @@
 import { Redirect, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -12,14 +13,16 @@ import { useGallery } from '@/hooks/use-gallery';
 import { deleteFromDevice } from '@/lib/media';
 import { scopeTitle, type Scope } from '@/lib/scopes';
 import { confirmAction } from '@/lib/ui';
-import { forgetItems, restoreItems } from '@/lib/user-data';
+import { forgetItems, restoreItems, TRASH_DAYS } from '@/lib/user-data';
 import { isVaultScope, useVaultUnlocked } from '@/lib/vault';
 
 export default function AlbumScreen() {
   const { scope = 'all' } = useLocalSearchParams<{ scope?: Scope }>();
   const { data, scoped } = useGallery();
   const unlocked = useVaultUnlocked();
-  const items = scoped(scope);
+  const [oldestFirst, setOldestFirst] = useState(false);
+  const scopedItems = scoped(scope);
+  const items = oldestFirst ? [...scopedItems].reverse() : scopedItems;
 
   if (isVaultScope(scope) && !unlocked) return <Redirect href="/vault" />;
 
@@ -30,7 +33,13 @@ export default function AlbumScreen() {
           title={scopeTitle(scope, data)}
           leading="back"
           actions={
-            scope === 'trash' && items.length > 0 ? (
+            <>
+              <IconButton
+                label={oldestFirst ? 'Show newest first' : 'Show oldest first'}
+                onPress={() => setOldestFirst((o) => !o)}>
+                <Icon ios="arrow.up.arrow.down" android="swap_vert" />
+              </IconButton>
+              {scope === 'trash' && items.length > 0 && (
               <>
                 <IconButton
                   label="Restore all"
@@ -56,13 +65,16 @@ export default function AlbumScreen() {
                   <Icon ios="trash" android="delete_forever" color="#E5484D" />
                 </IconButton>
               </>
-            ) : null
+              )}
+            </>
           }
         />
         <ThemedText type="small" themeColor="textSecondary" style={styles.count}>
-          {items.length} {items.length === 1 ? 'item' : 'items'}
+          {items.length} {items.length === 1 ? 'item' : 'items'} · {oldestFirst ? 'oldest first' : 'newest first'}
+          {scope === 'trash' ? ` · removed after ${TRASH_DAYS} days` : ''}
         </ThemedText>
         <MediaGrid
+          key={oldestFirst ? 'oldest' : 'newest'}
           items={items}
           scope={scope}
           likes={data.likes}

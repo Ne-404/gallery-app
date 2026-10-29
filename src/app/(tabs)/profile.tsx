@@ -25,7 +25,7 @@ const TABS: { scope: Scope; icon: { ios: 'square.grid.3x3' | 'heart' | 'lock' | 
 ];
 
 export default function ProfileScreen() {
-  const { library, data, reels, challenges, vaultCount, itemsById } = useGallery();
+  const { library, data, reels, challenges, itemCount, vaultCount, itemsById, isVaulted } = useGallery();
   const accent = useAccent();
   const theme = useTheme();
   const [tab, setTab] = useState<Scope>('all');
@@ -33,7 +33,7 @@ export default function ProfileScreen() {
   const { profile } = data;
   // The chosen picture, or the top favorite until one is chosen.
   const picture =
-    (profile.avatarId && itemsById.get(profile.avatarId)) ||
+    (profile.avatarId && !isVaulted(profile.avatarId) && itemsById.get(profile.avatarId)) ||
     scopeItems('liked', library.items, data)[0] ||
     library.items[0];
   const badges = challenges.filter((c) => c.state === 'completed').length;
@@ -49,7 +49,7 @@ export default function ProfileScreen() {
           )}
         </View>
         <View style={styles.stats}>
-          <Stat value={library.items.length} label="items" />
+          <Stat value={itemCount} label="items" />
           <Stat value={Object.keys(data.likes).length} label="likes" />
           <Stat value={vaultCount} label="in vault" />
         </View>

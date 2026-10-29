@@ -32,6 +32,9 @@ type MediaGridProps = {
   initialSelected?: string[];
   /** Lets the screen hide its own overlays while the selection bar is showing. */
   onSelectingChange?: (selecting: boolean) => void;
+  /** Pull to refresh. */
+  onRefresh?: () => void;
+  refreshing?: boolean;
 };
 
 /** Compact, Instagram-style infinite grid; renders in pages so huge libraries stay fast. */
@@ -47,6 +50,8 @@ export function MediaGrid({
   empty,
   initialSelected,
   onSelectingChange,
+  onRefresh,
+  refreshing = false,
 }: MediaGridProps) {
   const width = useAppWidth();
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
@@ -99,7 +104,10 @@ export function MediaGrid({
       keyExtractor={(item) => item.id}
       extraData={[likes, edits, selected]}
       numColumns={cols}
-      maxToRenderPerBatch={cols * 6}
+      onRefresh={onRefresh}
+      refreshing={refreshing}
+      // With numColumns these count rows, not tiles: 12 rows fill the screen even at 6 columns.
+      maxToRenderPerBatch={6}
       columnWrapperStyle={styles.row}
       contentContainerStyle={styles.content}
       ListHeaderComponent={header}
@@ -108,8 +116,8 @@ export function MediaGrid({
       ListEmptyComponent={empty}
       onEndReached={() => setVisibleCount((c) => Math.min(c + PAGE_SIZE, items.length))}
       onEndReachedThreshold={1.5}
-      initialNumToRender={30}
-      windowSize={7}
+      initialNumToRender={12}
+      windowSize={5}
       removeClippedSubviews
       renderItem={({ item }) => (
         <MediaTile

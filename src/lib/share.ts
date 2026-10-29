@@ -7,7 +7,7 @@ import { renderEdited } from '@/lib/export';
 import type { MediaItem } from '@/lib/media';
 
 /** A local file for the item: demo media is downloaded, device assets resolved. */
-async function localFile(item: MediaItem) {
+export async function localFile(item: MediaItem) {
   const uri = item.uri;
   if (uri.startsWith('http')) {
     const folder = new Directory(Paths.cache, 'share');

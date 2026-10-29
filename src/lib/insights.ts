@@ -34,7 +34,8 @@ export function computeInsights(items: MediaItem[], openDays: string[], now = Da
     : 0;
 
   const counts = {
-    photos: items.filter((i) => i.type === 'photo').length,
+    // A burst counts as one photo, like its single tile in the grid.
+    photos: items.filter((i) => i.type === 'photo' && (!i.burstId || i.burstId === i.id)).length,
     videos: items.filter((i) => i.type === 'video').length,
     live: items.filter((i) => i.kind === 'live').length,
     bursts: new Set(items.map((i) => i.burstId).filter(Boolean)).size,

@@ -11,14 +11,15 @@ A private, fully offline photo gallery for iOS, Android and the web, built with 
   - text, and drawing with a pen, marker or neon brush
 
   Saving creates an edited copy, and the original is never changed.
-- **Viewer:** pinch and double-tap to zoom, swipe between photos. Videos play in the built-in player, a minimal player or another app (your choice in Settings).
+- **Viewer:** pinch and double-tap to zoom, swipe between photos, swipe down to close, and play a slideshow. Videos play in the built-in player, a minimal player or another app (your choice in Settings).
 - **Organize:**
   - press and hold to select photos; select all
   - move photos into folders
   - favorite, rename, copy and share (Bluetooth, AirDrop/Nearby Share and other apps)
-  - Recently deleted, with restore
-- **Vault:** hide photos behind a passcode, with fingerprint unlock and recovery.
-- **Music player:** a turntable with a spinning record that plays imported songs, music found on the device, or sample tracks.
+  - Recently deleted, with Undo and restore; it empties itself after 30 days
+  - sort albums oldest or newest first, and pull to refresh
+- **Vault:** hide photos behind a passcode, with fingerprint unlock and recovery. Repeated wrong guesses lock entry for longer and longer. The vault hides photos inside the app but doesn't encrypt them.
+- **Music player:** a turntable with a spinning record that plays imported songs, music found on the device, or sample tracks. It has lock-screen and notification controls and a mini player that follows you around the app.
 - **PDF reader:** read PDFs with a pencil, highlighter and eraser. It remembers your progress and can pick up PDFs from a folder automatically.
 - **Notes:** a notes app with checklists, bullets, pinning, colors and photo attachments.
 - **Stories and profile:** curate your own stories and edit your profile.

@@ -11,7 +11,7 @@ import {
   useNotificationDeepLinks,
 } from '@/lib/notifications';
 import { starterStories } from '@/lib/reels';
-import { completeChallenge, recordAppOpen, seedStories, userData } from '@/lib/user-data';
+import { completeChallenge, purgeExpiredTrash, recordAppOpen, seedStories, userData } from '@/lib/user-data';
 
 /** App-wide side effects: load media, notifications, deep links and challenge completion. */
 export function useAppBootstrap() {
@@ -19,6 +19,7 @@ export function useAppBootstrap() {
 
   useEffect(() => {
     recordAppOpen();
+    purgeExpiredTrash();
     configureNotifications();
     loadLibrary();
   }, []);

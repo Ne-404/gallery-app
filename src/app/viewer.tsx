@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -9,7 +9,9 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
+import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import { CollectionPicker } from '@/components/collection-picker';
 import { EditedImage } from '@/components/edited-image';
@@ -17,16 +19,18 @@ import { Icon } from '@/components/icon';
 import { ItemActions } from '@/components/item-actions';
 import { TextPrompt } from '@/components/text-prompt';
 import { VideoSurface } from '@/components/video-surface';
-import { openInPlayer } from '@/lib/external-player';
 import { Zoomable } from '@/components/zoomable';
 import { LikeColor, Spacing } from '@/constants/theme';
 import { useAppWidth } from '@/hooks/use-app-width';
 import { useGallery } from '@/hooks/use-gallery';
 import { formatDate } from '@/lib/dates';
+import { openInPlayer } from '@/lib/external-player';
 import type { MediaItem, MediaKind } from '@/lib/media';
 import type { Scope } from '@/lib/scopes';
-import { setNote, toggleLike } from '@/lib/user-data';
+import { renameItem, setNote, toggleLike } from '@/lib/user-data';
 import { isVaultScope, useVaultUnlocked } from '@/lib/vault';
+
+const SLIDESHOW_MS = 3000;
 
 const KIND_LABELS: Record<MediaKind, string> = {
   single: 'Photo',
@@ -58,11 +62,60 @@ export default function ViewerScreen() {
   }
   const items = snapshot ?? [];
   const [editingNote, setEditingNote] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   const [pickerItem, setPickerItem] = useState<string | null>(null);
   const [menuItem, setMenuItem] = useState<string | null>(null);
   const [zoomed, setZoomed] = useState(false);
   // A single tap hides the bars for an unobstructed view.
   const [chrome, setChrome] = useState(true);
+  const [slideshow, setSlideshow] = useState(false);
+  const list = useRef<FlatList<MediaItem>>(null);
+  const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
+
+  // Slideshow: advance every few seconds; any touch (or the last photo) stops it.
+  useEffect(() => {
+    if (!slideshow) return;
+    const timer = setInterval(() => {
+      setIndex((i) => {
+        const next = i + 1;
+        if (next >= items.length) {
+          setSlideshow(false);
+          return i;
+        }
+        list.current?.scrollToIndex({ index: next, animated: true });
+        return next;
+      });
+    }, SLIDESHOW_MS);
+    return () => clearInterval(timer);
+  }, [slideshow, items.length]);
+
+  // The list already renders the neighbours; warm the cache one further each way, so quick
+  // swipes land on a loaded photo too.
+  useEffect(() => {
+    const ahead = [snapshot?.[index + 2], snapshot?.[index - 2]].filter((i) => i?.type === 'photo');
+    if (ahead.length) Image.prefetch(ahead.map((i) => i!.uri), 'memory-disk');
+  }, [snapshot, index]);
+
+  // Swipe down to close (when not zoomed): the photo follows the finger, then closes.
+  const dragY = useSharedValue(0);
+  const dismiss = usePanGesture({
+    enabled: !zoomed,
+    activeOffsetY: 24,
+    failOffsetX: [-20, 20],
+    onUpdate: (e) => {
+      'worklet';
+      dragY.set(Math.max(0, e.translationY));
+    },
+    onDeactivate: (e) => {
+      'worklet';
+      if (e.translationY > 120 || e.velocityY > 900) scheduleOnRN(close);
+      else dragY.set(withTiming(0, { duration: 180 }));
+    },
+  });
+  const dragStyle = useAnimatedStyle(() => ({
+    opacity: 1 - Math.min(dragY.get() / 600, 0.5),
+    transform: [{ translateY: dragY.get() }, { scale: 1 - Math.min(dragY.get() / 1600, 0.12) }],
+  }));
   const heart = useSharedValue(0);
   const heartStyle = useAnimatedStyle(() => ({
     opacity: heart.value,
@@ -90,15 +143,18 @@ export default function ViewerScreen() {
     const nowLiked = toggleLike(current.id);
     if (nowLiked) {
       heart.set(withSequence(withSpring(1), withTiming(0, { duration: 400 })));
-    } else {
     }
   };
 
 
   return (
     <View style={styles.container} onLayout={measure}>
+      <GestureDetector gesture={dismiss}>
+      <Animated.View style={[styles.fill, dragStyle]}>
       <FlatList
+        ref={list}
         data={items}
+        onScrollBeginDrag={() => setSlideshow(false)}
         keyExtractor={(item) => item.id}
         // Cells only re-render when this changes, so it includes the measured page height.
         extraData={[data, pageHeight, index]}
@@ -111,6 +167,8 @@ export default function ViewerScreen() {
         getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
         onMomentumScrollEnd={(e) => setIndex(Math.round(e.nativeEvent.contentOffset.x / width))}
         windowSize={3}
+        initialNumToRender={1}
+        maxToRenderPerBatch={2}
         renderItem={({ item, index: i }) => (
           <View style={{ width, height: pageHeight }}>
             {item.type === 'video' && data.settings.videoPlayer === 'external' ? (
@@ -128,10 +186,14 @@ export default function ViewerScreen() {
                 width={width}
                 height={pageHeight}
                 onZoomChange={setZoomed}
-                onSingleTap={() => setChrome((c) => !c)}>
+                onSingleTap={() => {
+                  setSlideshow(false);
+                  setChrome((c) => !c);
+                }}>
                 <EditedImage
                   uri={item.uri}
-                  placeholderUri={item.thumbUri}
+                  // The feed's preview is usually cached already: a sharp stand-in while loading.
+                  placeholderUri={item.previewUri ?? item.thumbUri}
                   edit={data.edits[item.id]}
                   sourceAspect={item.width / item.height}
                   style={styles.fill}
@@ -145,26 +207,43 @@ export default function ViewerScreen() {
           </View>
         )}
       />
+      </Animated.View>
+      </GestureDetector>
 
       <Animated.View pointerEvents="none" style={[styles.heartBurst, heartStyle]}>
         <Icon ios="heart.fill" android="favorite" size={110} color="#fff" />
       </Animated.View>
 
       <SafeAreaView
-        style={[styles.topBar, !chrome && styles.hidden]}
+        style={[styles.topBar, (!chrome || slideshow) && styles.hidden]}
         edges={['top']}
-        pointerEvents={chrome ? 'box-none' : 'none'}>
+        pointerEvents={chrome && !slideshow ? 'box-none' : 'none'}>
         <CloseButton />
-        <View style={styles.titleBlock}>
-          <Text style={styles.title}>
+        {/* Tap the title to name the photo: with dates hidden, a name is the only label it has. */}
+        <Pressable
+          onPress={() => setRenaming(true)}
+          accessibilityLabel="Rename"
+          style={({ pressed }) => [styles.titleBlock, pressed && styles.pressed]}>
+          <Text style={styles.title} numberOfLines={1}>
             {data.titles[current.id] ??
               (data.settings.hideDates ? KIND_LABELS[current.kind] : formatDate(current.createdAt))}
           </Text>
           <Text style={styles.subtitle}>
             {data.settings.hideDates ? '' : `${KIND_LABELS[current.kind]} · `}
             {index + 1} of {items.length}
+            {!data.titles[current.id] && ' · Tap to name'}
           </Text>
-        </View>
+        </Pressable>
+        <Pressable
+          onPress={() => {
+            setSlideshow(true);
+            setChrome(true);
+          }}
+          accessibilityLabel="Slideshow"
+          hitSlop={Spacing.two}
+          style={({ pressed }) => [styles.iconButton, styles.closeButton, styles.slideshowButton, pressed && styles.pressed]}>
+          <Icon ios="play.fill" android="slideshow" size={16} color="#fff" />
+        </Pressable>
         <Pressable
           onPress={() => setMenuItem(current.id)}
           accessibilityLabel="More options"
@@ -175,9 +254,9 @@ export default function ViewerScreen() {
       </SafeAreaView>
 
       <SafeAreaView
-        style={[styles.bottomBar, !chrome && styles.hidden]}
+        style={[styles.bottomBar, (!chrome || slideshow) && styles.hidden]}
         edges={['bottom']}
-        pointerEvents={chrome ? 'box-none' : 'none'}>
+        pointerEvents={chrome && !slideshow ? 'box-none' : 'none'}>
         {note && (
           <Pressable onPress={() => setEditingNote(true)} style={styles.note}>
             <Text style={styles.noteText} numberOfLines={3}>
@@ -231,6 +310,15 @@ export default function ViewerScreen() {
         onSubmit={(text) => {
           setNote(current.id, text);
         }}
+      />
+      <TextPrompt
+        visible={renaming}
+        title="Name"
+        placeholder="Give it a name"
+        initialValue={data.titles[current.id]}
+        submitLabel="Save name"
+        onClose={() => setRenaming(false)}
+        onSubmit={(text) => renameItem(current.id, text)}
       />
       <CollectionPicker itemId={pickerItem} onClose={() => setPickerItem(null)} />
       <ItemActions
@@ -317,6 +405,11 @@ const styles = StyleSheet.create({
     color: '#000',
     fontSize: 15,
     fontWeight: 700,
+  },
+  slideshowButton: {
+    position: 'absolute',
+    right: Spacing.three + 44,
+    bottom: Spacing.two,
   },
   hidden: {
     opacity: 0,

@@ -8,6 +8,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useAccent } from '@/hooks/use-gallery';
+import { showToast } from '@/lib/toast';
 import {
   addToCollection,
   createCollection,
@@ -40,6 +41,8 @@ export function MovePicker({ itemIds, target, onClose, onDone }: MovePickerProps
     if (!itemIds) return;
     if (target === 'folder') moveToFolder(id, itemIds);
     else addToCollection(id, itemIds);
+    const name = (target === 'folder' ? folders : collections).find((o) => o.id === id)?.name ?? (target === 'folder' ? 'folder' : 'the vault');
+    showToast(`Moved ${itemIds.length} to ${target === 'folder' ? name : 'the vault'}`);
     onClose();
     onDone?.();
   };

@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
 
 import { useAccent } from '@/hooks/use-gallery';
-import { storedBase64 } from '@/lib/local-files';
-import { loadAnnotations, saveAnnotations } from '@/lib/pdf-annotations';
+import { storedBase64, TOO_LARGE } from '@/lib/local-files';
+import { loadAnnotations, parseReaderMessage, saveAnnotations } from '@/lib/pdf-annotations';
 import { pdfAnnotatorHtml } from '@/lib/pdf-annotator-html';
 import { updatePdf, type PdfDoc } from '@/lib/user-data';
 
@@ -18,11 +18,19 @@ export function PdfView({ doc }: { doc: PdfDoc }) {
   useEffect(() => {
     const onMessage = async (e: MessageEvent) => {
       if (e.source !== frame.current?.contentWindow) return;
-      const msg = e.data;
+      const msg = parseReaderMessage(e.data);
+      if (!msg) return;
       if (msg.type === 'ready') {
-        const base64 = await storedBase64(doc.uri);
+        const bytes = await storedBase64(doc.uri).catch(() => null);
         frame.current?.contentWindow?.postMessage(
-          { type: 'load', base64, annotations: loadAnnotations(doc.id), page: startPage.current, accent },
+          {
+            type: 'load',
+            base64: bytes === TOO_LARGE ? null : bytes,
+            tooLarge: bytes === TOO_LARGE,
+            annotations: loadAnnotations(doc.id),
+            page: startPage.current,
+            accent,
+          },
           '*'
         );
       } else if (msg.type === 'annotations') {
@@ -35,5 +43,15 @@ export function PdfView({ doc }: { doc: PdfDoc }) {
     return () => window.removeEventListener('message', onMessage);
   }, [doc.id, doc.uri, accent]);
 
-  return <iframe ref={frame} srcDoc={html} title="PDF" style={{ flex: 1, width: '100%', height: '100%', border: 0 }} />;
+  // Sandboxed: the reader runs in its own opaque origin, so a malicious PDF can't reach the
+  // app's localStorage or IndexedDB. Messages still flow through postMessage.
+  return (
+    <iframe
+      ref={frame}
+      srcDoc={html}
+      title="PDF"
+      sandbox="allow-scripts allow-modals"
+      style={{ flex: 1, width: '100%', height: '100%', border: 0 }}
+    />
+  );
 }

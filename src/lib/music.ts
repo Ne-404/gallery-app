@@ -1,4 +1,5 @@
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
+import { Platform } from 'react-native';
 
 import { createStore } from '@/lib/create-store';
 import { AUDIO_FILES, canScanDevice, listFolder, pickFolder, scanAudioLibrary } from '@/lib/device-files';
@@ -107,6 +108,31 @@ export async function playTrack(track: Track) {
   objectUrl = url;
   p.replace({ uri: url });
   p.play();
+  showNowPlaying(p, track);
+}
+
+/**
+ * The media notification / lock-screen controls (title, play/pause, seek). On Android this
+ * also keeps playback alive in the background beyond the OS's ~3 minute limit.
+ */
+function showNowPlaying(p: AudioPlayer, track: Track) {
+  if (Platform.OS === 'web' || typeof p.setActiveForLockScreen !== 'function') return;
+  const metadata = { title: track.title, artist: track.artist, albumTitle: 'Gallery' };
+  try {
+    if (lockScreenActive) p.updateLockScreenMetadata(metadata);
+    else p.setActiveForLockScreen(true, metadata, { showSeekBackward: true, showSeekForward: true });
+    lockScreenActive = true;
+  } catch (error) {
+    console.warn('Lock screen controls unavailable', error);
+  }
+}
+
+let lockScreenActive = false;
+
+/** The current song, for the mini player and notification. */
+export function currentTrack() {
+  const { currentId } = music.get();
+  return allTracks().find((t) => t.id === currentId);
 }
 
 export function togglePlay() {
@@ -160,6 +186,10 @@ export async function importSongs() {
 export function deleteSong(track: Track) {
   if (music.get().currentId === track.id) {
     player?.pause();
+    if (lockScreenActive) {
+      player?.clearLockScreenControls();
+      lockScreenActive = false;
+    }
     music.set((s) => ({ ...s, currentId: null, playing: false, position: 0, duration: 0 }));
   }
   deleteStored(track.uri);

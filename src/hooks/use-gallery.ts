@@ -41,11 +41,19 @@ function derive(fullLibrary: Library, data: UserData) {
     library,
     data,
     itemsById,
+    /** How many tiles the library shows (a burst counts once): the number every screen reports. */
+    itemCount: visible.filter((i) => !i.burstId || i.burstId === i.id).length,
     vaultCount: vaulted.size,
-    trashCount: all.length - kept.length,
+    trashCount: all.filter((i) => data.trash[i.id] && !vaulted.has(i.id)).length,
+    /** Whether an item is in the vault (and so must not show up anywhere else). */
+    isVaulted: (id: string) => vaulted.has(id),
     /** Items of a scope; vault scopes reach saved items and `trash` the deleted ones. */
     scoped: (scope: Scope) =>
-      scopeItems(scope, scope === 'trash' ? all : isVaultScope(scope) ? kept : visible, data),
+      scopeItems(
+        scope,
+        scope === 'trash' ? all.filter((i) => !vaulted.has(i.id)) : isVaultScope(scope) ? kept : visible,
+        data
+      ),
     reels: buildReels(data.stories, new Map(visible.map((i) => [i.id, i]))),
     challenges: challengeStatuses(itemsById, data),
     unlocked: unlockedRewards(data),

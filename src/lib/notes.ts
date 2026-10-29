@@ -15,7 +15,8 @@ export type NoteEntry =
   | { kind: 'journal'; id: string; note: JournalNote; title: string; body: string; updatedAt: number; pinned: boolean }
   | { kind: 'photo'; id: string; itemId: string; title: string; body: string; updatedAt: number; pinned: false };
 
-export function noteEntries(data: UserData): NoteEntry[] {
+/** Notes for the Notes list. Notes on vault photos stay in the vault, so they're left out. */
+export function noteEntries(data: UserData, isVaulted: (id: string) => boolean): NoteEntry[] {
   const journal = data.journal.map(
     (note): NoteEntry => ({
       kind: 'journal',
@@ -27,7 +28,9 @@ export function noteEntries(data: UserData): NoteEntry[] {
       pinned: note.pinned,
     })
   );
-  const photos = Object.entries(data.notes).map(
+  const photos = Object.entries(data.notes)
+    .filter(([itemId]) => !isVaulted(itemId))
+    .map(
     ([itemId, note]): NoteEntry => ({
       kind: 'photo',
       id: `photo:${itemId}`,

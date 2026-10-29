@@ -27,7 +27,6 @@ export function useThemeWheel(host: Host) {
   const theme = useTheme();
   const accent = useAccent();
   const appearance = useUserData().settings.appearance;
-  const trigger = useRef<ComponentRef<typeof View>>(null);
   const [open, setOpen] = useState(false);
   const [center, setCenter] = useState({ x: 0, y: 0 });
   const [highlight, setHighlight] = useState(-1);
@@ -43,16 +42,14 @@ export function useThemeWheel(host: Host) {
   const openWheel = () => {
     if (gesture.current.open) return;
     gesture.current.open = true;
-    trigger.current?.measureInWindow((tx, ty, tw, th) => {
-      host.current?.measureInWindow((hx, hy, hw, hh) => {
-        // Center the wheel on the circle, nudged inward so every theme stays on screen.
-        const margin = RADIUS + ITEM / 2 + 24;
-        const clamp = (v: number, max: number) => Math.min(Math.max(v, margin), Math.max(margin, max - margin));
-        setCenter({ x: clamp(tx - hx + tw / 2, hw), y: clamp(ty - hy + th / 2, hh) });
-        setOpen(true);
-        progress.set(0);
-        progress.set(withSpring(1, { damping: 14, stiffness: 180 }));
-      });
+    // Centered on screen, clear of the side panel's edge. Picking by sliding works from
+    // anywhere: it follows the direction the finger moves, not where the wheel is drawn.
+    host.current?.measureInWindow((_hx, _hy, hw, hh) => {
+      setCenter({ x: hw / 2, y: hh / 2 });
+      setOpen(true);
+      progress.set(0);
+      // 4x the stiffness and 2x the damping: the same bounce in half the time.
+      progress.set(withSpring(1, { damping: 28, stiffness: 720 }));
     });
   };
 
@@ -93,7 +90,6 @@ export function useThemeWheel(host: Host) {
 
   const triggerElement = (
     <View
-      ref={trigger}
       accessible
       accessibilityRole="button"
       accessibilityLabel={`Theme: ${current.label}. Press and hold to change`}

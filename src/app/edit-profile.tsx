@@ -100,7 +100,9 @@ export default function EditProfileScreen() {
           numColumns={COLUMNS}
           columnWrapperStyle={styles.gridRow}
           ListHeaderComponent={form}
-          initialNumToRender={24}
+          // Rows, not tiles (numColumns): one screenful, so opening doesn't load every thumbnail.
+          initialNumToRender={8}
+          windowSize={3}
           renderItem={({ item }) => (
             <Pressable
               onPress={() => {

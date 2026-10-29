@@ -17,10 +17,19 @@ import { useTheme } from '@/hooks/use-theme';
 import { biometricsAvailable, confirmOwner } from '@/lib/biometrics';
 import { buildAlbums, type Album } from '@/lib/scopes';
 import { confirmAction } from '@/lib/ui';
-import { createCollection, deleteCollection, resetVault, setVaultPasscode } from '@/lib/user-data';
+import {
+  createCollection,
+  deleteCollection,
+  resetVault,
+  setVaultPasscode,
+  vaultLockoutSeconds,
+} from '@/lib/user-data';
 import { lockVault, openVault, unlockVault, useVaultUnlocked } from '@/lib/vault';
 
 type Stage = 'enter' | 'create' | 'confirm';
+
+const formatWait = (seconds: number) =>
+  seconds >= 60 ? `${Math.ceil(seconds / 60)} min` : `${seconds} s`;
 
 /**
  * Everything you save lives here, behind a passcode you set the first time you open it.
@@ -53,11 +62,10 @@ export default function VaultScreen() {
 
   const onPasscode = (passcode: string) => {
     if (stage === 'enter') {
-      if (unlockVault(passcode)) {
-        setError('');
-      } else {
-        fail('Wrong passcode. Try again.');
-      }
+      const result = unlockVault(passcode);
+      if (result === 'ok') setError('');
+      else if (result === 'locked') fail(`Too many tries. Wait ${formatWait(vaultLockoutSeconds())} and try again.`);
+      else fail('Wrong passcode. Try again.');
       return;
     }
     if (stage === 'create') {
@@ -81,7 +89,7 @@ export default function VaultScreen() {
   const resetEverything = () =>
     confirmAction(
       'Reset the vault?',
-      'The passcode is removed and your saved albums are emptied. The photos themselves go back to your library.',
+      'The passcode is removed and everything in the vault is removed from Gallery. Photos stay in your device’s photo library.',
       'Reset',
       () => {
         resetVault();

@@ -8,6 +8,7 @@ import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { AppFrame } from '@/components/app-frame';
 import { ExportHost } from '@/components/export-host';
 import { SidePanel } from '@/components/side-panel';
+import { ToastHost } from '@/components/toast-host';
 import { useAppBootstrap } from '@/hooks/use-app-bootstrap';
 import { useGallery } from '@/hooks/use-gallery';
 import { useTheme } from '@/hooks/use-theme';
@@ -69,6 +70,7 @@ export default function RootLayout() {
         </Stack>
         <SidePanel open={panelOpen} gallery={gallery} />
         <ExportHost />
+        <ToastHost />
       </AppFrame>
     </ThemeProvider>
     </GestureHandlerRootView>

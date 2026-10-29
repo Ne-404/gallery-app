@@ -42,6 +42,7 @@ export function AppBar({ title, leading = 'menu', brand, actions }: AppBarProps)
           brand && styles.brand,
           theme.brutal && styles.brutalTitle,
           theme.serif && styles.gothicTitle,
+          theme.retro && styles.retroTitle,
         ]}>
         {title}
       </ThemedText>
@@ -104,6 +105,12 @@ const styles = StyleSheet.create({
     fontWeight: 600,
     textTransform: 'uppercase',
     letterSpacing: 2,
+  },
+  retroTitle: {
+    fontFamily: Fonts.retro,
+    fontStyle: 'normal',
+    fontWeight: 700,
+    letterSpacing: 0,
   },
   actions: {
     flexDirection: 'row',

@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { router, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import {
   Platform,
@@ -24,6 +24,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { timeAgo } from '@/lib/dates';
 import { continueList, NOTE_COLORS, parseLines, prefixLine, toggleLine } from '@/lib/notes';
 import { confirmAction } from '@/lib/ui';
+import { useVaultUnlocked } from '@/lib/vault';
 import {
   createJournalNote,
   deleteJournalNote,
@@ -39,7 +40,8 @@ import {
  */
 export default function NoteScreen() {
   const params = useLocalSearchParams<{ id?: string; photo?: string }>();
-  const { data, itemsById, library } = useGallery();
+  const { data, itemsById, library, isVaulted } = useGallery();
+  const vaultUnlocked = useVaultUnlocked();
   const accent = useAccent();
   const theme = useTheme();
   const [noteId, setNoteId] = useState(params.id ?? null);
@@ -96,9 +98,12 @@ export default function NoteScreen() {
   };
   const close = () => (router.canGoBack() ? router.back() : router.replace('/notes'));
   const tint = note ? NOTE_COLORS[note.color] : null;
-  const attached = (note?.itemIds ?? []).flatMap((id) => itemsById.get(id) ?? []);
+  const attached = (note?.itemIds ?? []).flatMap((id) => (isVaulted(id) ? [] : (itemsById.get(id) ?? [])));
   const words = `${title} ${body}`.split(/\s+/).filter((w) => w && !/^[☐☑•#]$/.test(w)).length;
   const photo = photoId ? itemsById.get(photoId) : undefined;
+
+  // A note on a vault photo is part of the vault.
+  if (photoId && isVaulted(photoId) && !vaultUnlocked) return <Redirect href="/vault" />;
 
   return (
     <ThemedView style={[styles.container, tint && { backgroundColor: `${tint}${theme.dark ? '22' : '1A'}` }]}>

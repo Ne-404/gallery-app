@@ -76,10 +76,21 @@ export async function storedUrl(uri: string) {
   return file?.exists ? file.uri : null;
 }
 
-/** The file's bytes as base64 (the PDF annotator loads documents this way), or null if gone. */
-export async function storedBase64(uri: string) {
+/**
+ * The reader gets the whole file as base64 in memory (several copies of it, across the
+ * bridge), so larger files would crash it instead of opening.
+ */
+export const MAX_READER_BYTES = 60 * 1024 * 1024;
+export const TOO_LARGE = 'too-large';
+
+/**
+ * The file's bytes as base64 (the PDF annotator loads documents this way), null if gone,
+ * or `TOO_LARGE` past `MAX_READER_BYTES`.
+ */
+export async function storedBase64(uri: string): Promise<string | null> {
   const file = resolve(uri);
   if (!file?.exists) return null;
+  if (file.size > MAX_READER_BYTES) return TOO_LARGE;
   try {
     return await file.base64();
   } catch {

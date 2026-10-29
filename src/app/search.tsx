@@ -36,6 +36,15 @@ export default function SearchScreen() {
   const expand = (s: string) =>
     s === 'Weekend' ? 'saturday' : s === 'Summer' ? 'july' : s === 'Videos' ? 'video' : s;
 
+  // Each chip shows what tapping it finds, so dead ends are hidden. Only counted while the
+  // chips are on screen, not on every keystroke.
+  const counts: Record<string, number> =
+    query.trim() === ''
+      ? Object.fromEntries(
+          [...SUGGESTIONS, ...years].map((s) => [s, searchMedia(expand(s).toLowerCase(), library.items, data).length])
+        )
+      : {};
+
   const choose = (s: string) => {
     setQuery(expand(s).toLowerCase());
   };
@@ -69,8 +78,8 @@ export default function SearchScreen() {
 
         {query.trim() === '' ? (
           <ScrollView contentContainerStyle={styles.suggestions}>
-            <Group title="Try" items={SUGGESTIONS} onPick={choose} />
-            <Group title="Years" items={years} onPick={choose} />
+            <Group title="Try" items={SUGGESTIONS.filter((s) => counts[s] > 0)} counts={counts} onPick={choose} />
+            <Group title="Years" items={years} counts={counts} onPick={choose} />
             <ThemedText type="small" themeColor="textSecondary" style={styles.privacy}>
               🔒 Search runs entirely on this device.
             </ThemedText>
@@ -101,12 +110,15 @@ export default function SearchScreen() {
 function Group({
   title,
   items,
+  counts,
   onPick,
 }: {
   title: string;
   items: string[];
+  counts: Record<string, number>;
   onPick: (value: string) => void;
 }) {
+  if (items.length === 0) return null;
   return (
     <View style={styles.group}>
       <ThemedText type="smallBold">{title}</ThemedText>
@@ -115,6 +127,9 @@ function Group({
           <Pressable key={item} onPress={() => onPick(item)} style={({ pressed }) => pressed && styles.pressed}>
             <ThemedView type="backgroundElement" style={styles.chip}>
               <ThemedText type="small">{item}</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                {counts[item]}
+              </ThemedText>
             </ThemedView>
           </Pressable>
         ))}
@@ -165,6 +180,8 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   chip: {
+    flexDirection: 'row',
+    gap: Spacing.two,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
     borderRadius: Spacing.four,

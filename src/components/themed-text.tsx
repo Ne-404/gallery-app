@@ -18,6 +18,7 @@ export function ThemedText({ style, type = 'default', themeColor, ...rest }: The
         styles[type],
         theme.brutal && (type === 'title' || type === 'subtitle' || type === 'smallBold') && styles.heavy,
         theme.serif && (type === 'title' || type === 'subtitle') && styles.serif,
+        theme.retro && type !== 'code' && styles.retro,
         style,
       ]}
       {...rest}
@@ -63,6 +64,10 @@ const styles = StyleSheet.create({
   serif: {
     fontFamily: Fonts.serif,
     letterSpacing: 0.5,
+  },
+  retro: {
+    fontFamily: Fonts.retro,
+    letterSpacing: 0,
   },
   heavy: {
     fontWeight: 800,

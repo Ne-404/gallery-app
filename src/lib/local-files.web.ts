@@ -2,6 +2,9 @@ import * as DocumentPicker from 'expo-document-picker';
 
 import type { FileKind, StoredFile } from '@/lib/local-files';
 
+export const MAX_READER_BYTES = 60 * 1024 * 1024;
+export const TOO_LARGE = 'too-large';
+
 /**
  * Browser storage for imported files. They're too big for localStorage, so the bytes live
  * in IndexedDB and the stored `uri` is `idb:<id>`.
@@ -50,9 +53,10 @@ export async function storedUrl(uri: string) {
   return blob ? URL.createObjectURL(blob) : null;
 }
 
-export async function storedBase64(uri: string) {
+export async function storedBase64(uri: string): Promise<string | null> {
   const blob = await run<Blob | undefined>('readonly', (store) => store.get(keyOf(uri)));
   if (!blob) return null;
+  if (blob.size > MAX_READER_BYTES) return TOO_LARGE;
   const bytes = new Uint8Array(await blob.arrayBuffer());
   let binary = '';
   for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));

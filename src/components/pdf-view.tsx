@@ -3,8 +3,8 @@ import { StyleSheet } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
 import { useAccent } from '@/hooks/use-gallery';
-import { storedBase64 } from '@/lib/local-files';
-import { loadAnnotations, saveAnnotations } from '@/lib/pdf-annotations';
+import { storedBase64, TOO_LARGE } from '@/lib/local-files';
+import { loadAnnotations, parseReaderMessage, saveAnnotations } from '@/lib/pdf-annotations';
 import { pdfAnnotatorHtml } from '@/lib/pdf-annotator-html';
 import { updatePdf, type PdfDoc } from '@/lib/user-data';
 
@@ -19,11 +19,19 @@ export function PdfView({ doc }: { doc: PdfDoc }) {
   const web = useRef<ComponentRef<typeof WebView>>(null);
 
   const onMessage = async (e: WebViewMessageEvent) => {
-    const msg = JSON.parse(e.nativeEvent.data);
+    const msg = parseReaderMessage(e.nativeEvent.data);
+    if (!msg) return;
     if (msg.type === 'ready') {
-      // Null when the file is missing; the reader then explains instead of crashing.
-      const base64 = await storedBase64(doc.uri).catch(() => null);
-      const payload = { type: 'load', base64, annotations: loadAnnotations(doc.id), page: doc.lastPage ?? 1, accent };
+      // Null when the file is missing or too large; the reader then explains instead of crashing.
+      const bytes = await storedBase64(doc.uri).catch(() => null);
+      const payload = {
+        type: 'load',
+        base64: bytes === TOO_LARGE ? null : bytes,
+        tooLarge: bytes === TOO_LARGE,
+        annotations: loadAnnotations(doc.id),
+        page: doc.lastPage ?? 1,
+        accent,
+      };
       web.current?.injectJavaScript(`window.receive(${JSON.stringify(payload)}); true;`);
     } else if (msg.type === 'annotations') {
       saveAnnotations(doc.id, msg.annotations);
@@ -39,6 +47,9 @@ export function PdfView({ doc }: { doc: PdfDoc }) {
       originWhitelist={['*']}
       onMessage={onMessage}
       javaScriptEnabled
+      // The reader is a single local page: never let a document navigate it elsewhere.
+      onShouldStartLoadWithRequest={(request) => request.url.startsWith('https://localhost') || request.url === 'about:blank'}
+      setSupportMultipleWindows={false}
       style={styles.web}
     />
   );

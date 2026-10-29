@@ -98,7 +98,9 @@ export default function StoryEditorScreen() {
           columnWrapperStyle={styles.gridRow}
           ListHeaderComponent={header}
           extraData={selected}
-          initialNumToRender={24}
+          // Rows, not tiles (numColumns): one screenful, so opening doesn't load every thumbnail.
+          initialNumToRender={8}
+          windowSize={3}
           renderItem={({ item }) => {
             const order = selected.indexOf(item.id);
             return (

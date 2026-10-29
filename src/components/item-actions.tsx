@@ -15,6 +15,7 @@ import { formatDate, formatDuration } from '@/lib/dates';
 import { isEdited } from '@/lib/edits';
 import { deleteFromDevice } from '@/lib/media';
 import { shareItem } from '@/lib/share';
+import { showToast } from '@/lib/toast';
 import { confirmAction } from '@/lib/ui';
 import {
   copyItem,
@@ -24,6 +25,7 @@ import {
   toggleLike,
   trashItems,
 } from '@/lib/user-data';
+import { canSetWallpaper, setAsWallpaper } from '@/lib/wallpaper';
 
 const KIND_LABELS = {
   single: 'Photo',
@@ -36,8 +38,8 @@ const KIND_LABELS = {
 type Mode = 'menu' | 'rename' | 'move' | 'details';
 
 /**
- * The "⋯" menu for a photo or video: edit, rename, move to the vault, copy, share,
- * favorite, details and delete. Deleted items get restore / delete forever instead.
+ * The "⋯" menu for a photo or video: edit, rename, move to the vault, copy, share, set as
+ * wallpaper, favorite, details and delete. Deleted items get restore / delete forever instead.
  */
 export function ItemActions({
   itemId,
@@ -52,7 +54,7 @@ export function ItemActions({
   /** Shows "Select" (start multi-select with this item) when given. */
   onSelect?: (itemId: string) => void;
 }) {
-  const { itemsById, data } = useGallery();
+  const { itemsById, data, isVaulted } = useGallery();
   const theme = useTheme();
   const [mode, setMode] = useState<Mode>('menu');
   const item = itemId ? itemsById.get(itemId) : undefined;
@@ -82,6 +84,7 @@ export function ItemActions({
           icon: { ios: 'arrow.uturn.backward', android: 'restore' },
           onPress: () => {
             restoreItems([item.id]);
+            showToast('Restored');
             close();
             onRemoved?.();
           },
@@ -139,6 +142,7 @@ export function ItemActions({
           icon: { ios: 'plus.square.on.square', android: 'content_copy' },
           onPress: () => {
             copyItem(item.id);
+            showToast('Copy made');
             close();
           },
         },
@@ -150,6 +154,18 @@ export function ItemActions({
             await shareItem(item, edit);
           },
         },
+        ...(item.type === 'photo' && canSetWallpaper
+          ? [
+              {
+                label: 'Set as wallpaper',
+                icon: { ios: 'photo.on.rectangle', android: 'wallpaper' } as const,
+                onPress: async () => {
+                  close();
+                  if (!(await setAsWallpaper(item, edit))) showToast('Can’t set a wallpaper here');
+                },
+              },
+            ]
+          : []),
         {
           label: liked ? 'Remove from favorites' : 'Add to favorites',
           icon: liked ? { ios: 'heart.fill', android: 'favorite' } : { ios: 'heart', android: 'favorite_border' },
@@ -168,7 +184,19 @@ export function ItemActions({
           icon: { ios: 'trash', android: 'delete' },
           color: '#E5484D',
           onPress: () => {
+            // Vault photos are deleted for good (like a phone's locked folder), so they never
+            // appear in the public Recently deleted.
+            if (isVaulted(item.id)) {
+              confirmAction('Delete from vault?', 'Vault photos are deleted permanently.', 'Delete', async () => {
+                close();
+                onRemoved?.();
+                await deleteFromDevice([item.id]);
+                forgetItems([item.id]);
+              });
+              return;
+            }
             trashItems([item.id]);
+            showToast('Moved to Recently deleted', { label: 'Undo', onPress: () => restoreItems([item.id]) });
             close();
             onRemoved?.();
           },

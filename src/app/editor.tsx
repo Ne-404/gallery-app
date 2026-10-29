@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useRef, useState, type ComponentRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, type GestureResponderEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -31,6 +31,8 @@ import {
   AUTO_ENHANCE,
 } from '@/lib/edits';
 import { COPY_MARK, copyItem, setEdit } from '@/lib/user-data';
+import { showToast } from '@/lib/toast';
+import { useVaultUnlocked } from '@/lib/vault';
 
 type Tool = 'filters' | 'adjust' | 'crop' | 'draw' | 'text';
 
@@ -59,7 +61,8 @@ const BRUSHES: { id: Stroke['kind']; label: string }[] = [
  */
 export default function EditorScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { itemsById, data } = useGallery();
+  const { itemsById, data, isVaulted } = useGallery();
+  const vaultUnlocked = useVaultUnlocked();
   const accent = useAccent();
   const item = itemsById.get(id);
   const [draft, setDraft] = useState<Edit>(() => data.edits[id] ?? DEFAULT_EDIT);
@@ -73,6 +76,7 @@ export default function EditorScreen() {
   const [brush, setBrush] = useState<Omit<Stroke, 'points'>>({ kind: 'pen', color: '#FF3B5C', width: 0.012 });
 
   if (!item) return <View style={styles.container} />;
+  if (isVaulted(item.id) && !vaultUnlocked) return <Redirect href="/vault" />;
 
   const update = (patch: Partial<Edit>) => setDraft((d) => ({ ...d, ...patch }));
   const updateText = (layerId: string, patch: Partial<TextLayer>) =>
@@ -82,7 +86,10 @@ export default function EditorScreen() {
   const isCopy = item.id.includes(COPY_MARK);
   const save = () => {
     if (isCopy) setEdit(item.id, draft);
-    else if (isEdited(draft)) setEdit(copyItem(item.id), draft);
+    else if (isEdited(draft)) {
+      setEdit(copyItem(item.id), draft);
+      showToast('Saved as a new copy. The original is unchanged.');
+    }
     close();
   };
 

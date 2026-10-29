@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { Icon } from '@/components/icon';
+import { MiniPlayer } from '@/components/mini-player';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Vinyl } from '@/components/vinyl';
@@ -84,6 +85,7 @@ export default function AppTabs() {
           <TabSlot style={styles.root} />
         </View>
       </GestureDetector>
+      <MiniPlayer />
       <TabList asChild>
         <NavigationBar>
           {TABS.map((tab) => (
@@ -109,6 +111,7 @@ function NavigationBar({ children, ...props }: { children: React.ReactNode }) {
         { bottom: insets.bottom + Spacing.three },
         theme.outline === 0 && { boxShadow: theme.dark ? '0px 8px 28px rgba(0,0,0,0.6)' : '0px 8px 28px rgba(0,0,0,0.16)' },
         theme.brutal && styles.barBrutal,
+        theme.retro && styles.barRetro,
       ]}>
       {children}
     </ThemedView>
@@ -147,6 +150,8 @@ function NavItem({
           styles.indicator,
           isFocused && { backgroundColor: theme.brutal ? accent : `${accent}2E` },
           isFocused && theme.brutal && { borderWidth: 2, borderColor: theme.border },
+          theme.retro && styles.indicatorRetro,
+          isFocused && theme.retro && { backgroundColor: theme.backgroundSelected, boxShadow: sunken },
           jumpStyle,
         ]}>
         {label === 'Music' ? (
@@ -169,6 +174,8 @@ function NavItem({
   );
 }
 
+const sunken = 'inset 1px 1px 0px #808080, inset -1px -1px 0px #FFFFFF';
+
 const styles = StyleSheet.create({
   root: {
     flex: 1,
@@ -187,6 +194,13 @@ const styles = StyleSheet.create({
   },
   barBrutal: {
     borderRadius: 18,
+  },
+  // Windows 98: the tab bar becomes a taskbar, with the active tab pressed in.
+  barRetro: {
+    borderRadius: 2,
+  },
+  indicatorRetro: {
+    borderRadius: 1,
   },
   item: {
     flex: 1,

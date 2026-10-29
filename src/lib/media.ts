@@ -25,6 +25,8 @@ export type MediaItem = {
   /** Renderable by expo-image (`ph://` on iOS, `content://` on Android, https for demo). */
   uri: string;
   thumbUri: string;
+  /** Medium-size image for the feed (falls back to `uri`); demo photos are served smaller. */
+  previewUri?: string;
   type: 'photo' | 'video';
   kind: MediaKind;
   /** Milliseconds since epoch. */
@@ -39,7 +41,7 @@ export type MediaItem = {
 
 export type PermissionState = 'granted' | 'limited' | 'denied' | 'undetermined' | 'unavailable';
 
-type LibraryState = {
+export type LibraryState = {
   status: 'loading' | 'ready';
   source: LibrarySource;
   permission: PermissionState;
@@ -215,6 +217,7 @@ function demoLibrary(): MediaItem[] {
       id: `demo-photo-${id}`,
       uri: `https://picsum.photos/id/${id}/1080/1440`,
       thumbUri: `https://picsum.photos/id/${id}/360/360`,
+      previewUri: `https://picsum.photos/id/${id}/720/960`,
       type: 'photo',
       kind: i % 13 === 5 ? 'live' : 'single',
       createdAt,
@@ -232,6 +235,7 @@ function demoLibrary(): MediaItem[] {
       id: `demo-burst-${i}`,
       uri: `https://picsum.photos/id/${id}/1080/1440`,
       thumbUri: `https://picsum.photos/id/${id}/360/360`,
+      previewUri: `https://picsum.photos/id/${id}/720/960`,
       type: 'photo',
       kind: 'single',
       createdAt: burstStart + i * 400,

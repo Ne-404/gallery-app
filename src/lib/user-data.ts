@@ -23,7 +23,7 @@ export type MediaCopy = { id: string; sourceId: string; createdAt: number };
 /** A PDF imported into the reader. `uri` is a local file on device; web keeps the bytes in IndexedDB. */
 export type PdfDoc = { id: string; name: string; size: number; addedAt: number; uri: string; lastPage?: number };
 /** A regular (not private) folder of photos. A photo lives in at most one folder. */
-export type Folder = { id: string; name: string; itemIds: string[]; createdAt: number };
+export type Folder = { id: string; name: string; itemIds: string[]; createdAt: number; hidden?: boolean };
 /** A note in the Notes app (photo notes stay in `notes`, keyed by photo). */
 export type JournalNote = {
   id: string;
@@ -48,8 +48,18 @@ export type Profile = {
   /** Item shown as the profile picture; falls back to the top favorite. */
   avatarId?: string;
 };
-/** Salted SHA-256 of the vault passcode; the passcode itself is never stored. */
-export type VaultLock = { hash: string; salt: string };
+/**
+ * The vault passcode as a salted, iterated SHA-256 hash (never the passcode itself), plus
+ * wrong-attempt tracking so the 10,000 possible codes can't simply be tried one by one.
+ */
+export type VaultLock = {
+  hash: string;
+  salt: string;
+  /** Hash rounds; missing on passcodes set before stretching was added (1 round). */
+  iterations?: number;
+  failures?: number;
+  lockedUntil?: number;
+};
 
 export type Settings = {
   memoryReminders: boolean;
@@ -64,6 +74,8 @@ export type Settings = {
   musicFolder: string | null;
   pdfFolder: string | null;
   source: LibrarySource;
+  /** The demo-media banner on Home was closed; Settings still explains the library source. */
+  libraryBannerDismissed: boolean;
 };
 
 export type UserData = {
@@ -124,6 +136,7 @@ const DEFAULT_DATA: UserData = {
     musicFolder: null,
     pdfFolder: null,
     source: 'device',
+    libraryBannerDismissed: false,
   },
 };
 
@@ -273,20 +286,76 @@ export function resetUserData() {
   userData.set({ ...DEFAULT_DATA, settings: userData.get().settings });
 }
 
-const hashPasscode = (passcode: string, salt: string) => sha256(`${salt}:${passcode}`);
+const HASH_ROUNDS = 3000;
+const FREE_ATTEMPTS = 5;
+
+/** Key stretching: each guess costs thousands of hashes instead of one. */
+function hashPasscode(passcode: string, salt: string, rounds: number) {
+  let hash = sha256(`${salt}:${passcode}`);
+  for (let i = 1; i < rounds; i++) hash = sha256(`${hash}:${salt}`);
+  return hash;
+}
+
+/** Compares without exiting early, so timing doesn't reveal how much of a hash matched. */
+function sameHash(a: string, b: string) {
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < Math.max(a.length, b.length); i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+function randomSalt() {
+  const bytes = new Uint8Array(16);
+  if (globalThis.crypto?.getRandomValues) globalThis.crypto.getRandomValues(bytes);
+  else for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
 
 export function setVaultPasscode(passcode: string) {
-  const salt = Array.from({ length: 4 }, () => Math.random().toString(36).slice(2)).join('');
-  userData.set((d) => ({ ...d, vault: { salt, hash: hashPasscode(passcode, salt) } }));
+  const salt = randomSalt();
+  userData.set((d) => ({
+    ...d,
+    vault: { salt, iterations: HASH_ROUNDS, hash: hashPasscode(passcode, salt, HASH_ROUNDS) },
+  }));
 }
 
-export function checkVaultPasscode(passcode: string) {
+/** Seconds until another attempt is allowed (0 when not locked out). */
+export function vaultLockoutSeconds() {
+  const until = userData.get().vault?.lockedUntil ?? 0;
+  return Math.max(0, Math.ceil((until - Date.now()) / 1000));
+}
+
+/**
+ * Checks a passcode. After 5 wrong attempts each further miss locks entry for 30 s,
+ * doubling up to an hour. Old single-round hashes are upgraded on success.
+ */
+export function checkVaultPasscode(passcode: string): 'ok' | 'wrong' | 'locked' {
   const vault = userData.get().vault;
-  return !!vault && hashPasscode(passcode, vault.salt) === vault.hash;
+  if (!vault) return 'wrong';
+  if (vaultLockoutSeconds() > 0) return 'locked';
+  const rounds = vault.iterations ?? 1;
+  if (sameHash(hashPasscode(passcode, vault.salt, rounds), vault.hash)) {
+    if (rounds < HASH_ROUNDS) setVaultPasscode(passcode);
+    else clearVaultFailures();
+    return 'ok';
+  }
+  const failures = (vault.failures ?? 0) + 1;
+  const extra = failures - FREE_ATTEMPTS;
+  const lockedUntil = extra > 0 ? Date.now() + Math.min(3600, 30 * 2 ** (extra - 1)) * 1000 : undefined;
+  userData.set((d) => (d.vault ? { ...d, vault: { ...d.vault, failures, lockedUntil } } : d));
+  return lockedUntil ? 'locked' : 'wrong';
 }
 
-/** Forgotten passcode: removes the lock and empties the vault (items go back to the library). */
+/** After a successful unlock (passcode or fingerprint). */
+export function clearVaultFailures() {
+  userData.set((d) => (d.vault ? { ...d, vault: { ...d.vault, failures: 0, lockedUntil: undefined } } : d));
+}
+
+/**
+ * Forgotten passcode: removes the lock and everything in the vault. Its items are forgotten
+ * rather than returned to the library, so a reset never reveals what the vault hid.
+ */
 export function resetVault() {
+  forgetItems(userData.get().collections.flatMap((c) => c.items.map((e) => e.id)));
   userData.set((d) => ({ ...d, vault: null, collections: [] }));
 }
 
@@ -450,6 +519,11 @@ export function renameFolder(folderId: string, name: string) {
   userData.set((d) => ({ ...d, folders: d.folders.map((f) => (f.id === folderId ? { ...f, name: name.trim() || f.name } : f)) }));
 }
 
+/** Hides a folder from the Albums list (its photos stay in the gallery), or shows it again. */
+export function setFolderHidden(folderId: string, hidden: boolean) {
+  userData.set((d) => ({ ...d, folders: d.folders.map((f) => (f.id === folderId ? { ...f, hidden } : f)) }));
+}
+
 /** Deletes the folder only; its photos stay in the gallery. */
 export function deleteFolder(folderId: string) {
   userData.set((d) => ({ ...d, folders: d.folders.filter((f) => f.id !== folderId) }));
@@ -474,4 +548,18 @@ export function likeItems(itemIds: string[]) {
     ...d,
     likes: { ...d.likes, ...Object.fromEntries(itemIds.filter((id) => !d.likes[id]).map((id) => [id, Date.now()])) },
   }));
+}
+
+export const TRASH_DAYS = 30;
+
+/**
+ * Forgets items that have sat in Recently deleted for 30 days. Device photos are only
+ * hidden from the app here (deleting them needs the user's confirmation).
+ */
+export function purgeExpiredTrash() {
+  const cutoff = Date.now() - TRASH_DAYS * 24 * 60 * 60 * 1000;
+  const expired = Object.entries(userData.get().trash)
+    .filter(([, deletedAt]) => deletedAt < cutoff)
+    .map(([id]) => id);
+  if (expired.length > 0) forgetItems(expired);
 }

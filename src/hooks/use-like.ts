@@ -22,7 +22,6 @@ export function useLike() {
   const toggle = (itemId: string) => {
     if (toggleLike(itemId)) {
       burst();
-    } else {
     }
   };
 
