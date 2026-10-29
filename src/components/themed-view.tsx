@@ -11,6 +11,13 @@ export type ThemedViewProps = ViewProps & {
 
 export function ThemedView({ style, lightColor, darkColor, type, ...otherProps }: ThemedViewProps) {
   const theme = useTheme();
+  // Outlined themes (Brutal, Pop Art, Blood Moon) frame every raised surface.
+  const raised =
+    theme.outline > 0 && type === 'backgroundElement'
+      ? { borderWidth: theme.outline, borderColor: theme.border, boxShadow: theme.shadow }
+      : null;
 
-  return <View style={[{ backgroundColor: theme[type ?? 'background'] }, style]} {...otherProps} />;
+  return (
+    <View style={[{ backgroundColor: theme[type ?? 'background'] }, raised, style]} {...otherProps} />
+  );
 }

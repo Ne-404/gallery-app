@@ -11,7 +11,18 @@ export type ThemedTextProps = TextProps & {
 export function ThemedText({ style, type = 'default', themeColor, ...rest }: ThemedTextProps) {
   const theme = useTheme();
 
-  return <Text style={[{ color: theme[themeColor ?? 'text'] }, styles[type], style]} {...rest} />;
+  return (
+    <Text
+      style={[
+        { color: theme[themeColor ?? 'text'] },
+        styles[type],
+        theme.brutal && (type === 'title' || type === 'subtitle' || type === 'smallBold') && styles.heavy,
+        theme.serif && (type === 'title' || type === 'subtitle') && styles.serif,
+        style,
+      ]}
+      {...rest}
+    />
+  );
 }
 
 const styles = StyleSheet.create({
@@ -48,6 +59,14 @@ const styles = StyleSheet.create({
     lineHeight: 30,
     fontSize: 14,
     color: '#3c87f7',
+  },
+  serif: {
+    fontFamily: Fonts.serif,
+    letterSpacing: 0.5,
+  },
+  heavy: {
+    fontWeight: 800,
+    letterSpacing: -0.3,
   },
   code: {
     fontFamily: Fonts.mono,
