@@ -1,4 +1,4 @@
-# Gallery
+# Gall.
 
 A private, fully offline photo gallery for iOS, Android and the web, built with Expo and React Native. It has an Instagram-style, Material 3 interface, and everything you create (likes, edits, notes, albums) stays on your device. Nothing is uploaded.
 
