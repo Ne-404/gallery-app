@@ -1,4 +1,5 @@
 import type { Edit } from '@/lib/edits';
+import { t } from '@/lib/i18n';
 import type { MediaItem } from '@/lib/media';
 
 async function toFile(item: MediaItem) {
@@ -22,7 +23,7 @@ export async function shareItems(items: MediaItem[], _edits?: Record<string, Edi
   try {
     const files = await Promise.all(items.map(toFile));
     if (navigator.canShare?.({ files })) {
-      await navigator.share({ files, title: 'Gallery' });
+      await navigator.share({ files, title: t('Gally-ri') });
       return true;
     }
     files.forEach(download);
@@ -34,8 +35,3 @@ export async function shareItems(items: MediaItem[], _edits?: Record<string, Edi
 }
 
 export const shareItem = (item: MediaItem, _edit?: Edit) => shareItems([item]);
-
-export async function shareFile(uri: string) {
-  window.open(uri, '_blank');
-  return true;
-}

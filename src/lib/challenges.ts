@@ -2,6 +2,7 @@ import type { AndroidSymbol, SFSymbol } from 'expo-symbols';
 
 import { Accents, type AccentName } from '@/constants/theme';
 import { DAY_MS, dayKey } from '@/lib/dates';
+import { translator, type TKey, type Translator } from '@/lib/i18n';
 import type { MediaItem } from '@/lib/media';
 import type { UserData } from '@/lib/user-data';
 
@@ -9,8 +10,9 @@ export type Reward = { type: 'accent'; accent: AccentName } | { type: 'effect'; 
 
 export type Challenge = {
   id: string;
-  title: string;
-  description: string;
+  /** English source strings; shown through `t()`. */
+  title: TKey;
+  description: TKey;
   goal: number;
   durationDays: number;
   reward: Reward;
@@ -124,10 +126,10 @@ export function challengeStatuses(items: Map<string, MediaItem>, data: UserData)
   });
 }
 
-export function rewardLabel(reward: Reward) {
+export function rewardLabel(reward: Reward, t: Translator = translator()) {
   return reward.type === 'accent'
-    ? `${Accents[reward.accent].label} theme`
-    : 'Cinematic reel effect';
+    ? t('{accent} theme', { accent: t(Accents[reward.accent].label) })
+    : t('Cinematic reel effect');
 }
 
 export function unlockedRewards(data: UserData) {

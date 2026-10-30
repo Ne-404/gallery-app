@@ -7,11 +7,14 @@ import { Colors, ThemeStyles, type ThemeName } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useUserData } from '@/lib/user-data';
 
-/** The active theme: the user's Appearance choice, or the system scheme for `system`. */
+/**
+ * The active theme: the user's Appearance choice, or the system scheme for `system`
+ * (and for a saved theme that no longer exists).
+ */
 export function useThemeName(): ThemeName {
   const scheme = useColorScheme();
   const appearance = useUserData().settings.appearance;
-  if (appearance === 'system') return scheme === 'dark' ? 'dark' : 'light';
+  if (appearance === 'system' || !(appearance in Colors)) return scheme === 'dark' ? 'dark' : 'light';
   return appearance;
 }
 

@@ -16,4 +16,3 @@ export function listFolder(_folderUri: string, _pattern: RegExp, _depth = 3): De
 }
 
 export const AUDIO_FILES = /\.(mp3|m4a|aac|wav|flac|ogg|opus)$/i;
-export const PDF_FILES = /\.pdf$/i;

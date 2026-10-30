@@ -6,8 +6,8 @@
     {
       "layers" : [
         {
-          "image-name" : "gallery-glyph.svg",
-          "name" : "gallery-glyph",
+          "image-name" : "ship-glyph.svg",
+          "name" : "ship-glyph",
           "position" : {
             "scale" : 1,
             "translation-in-points" : [

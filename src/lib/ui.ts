@@ -1,5 +1,7 @@
 import { Alert, Platform } from 'react-native';
 
+import { t } from '@/lib/i18n';
+
 /** Side panel open/close, driven by state owned by the root layout. */
 let setPanelOpen: ((open: boolean) => void) | null = null;
 
@@ -17,7 +19,7 @@ export function confirmAction(title: string, message: string, confirmLabel: stri
     return;
   }
   Alert.alert(title, message, [
-    { text: 'Cancel', style: 'cancel' },
+    { text: t('Cancel'), style: 'cancel' },
     { text: confirmLabel, style: 'destructive', onPress: onConfirm },
   ]);
 }

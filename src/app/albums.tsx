@@ -6,23 +6,20 @@ import { AlbumsOverview } from '@/components/albums-overview';
 import { AppBar, IconButton } from '@/components/app-bar';
 import { Icon } from '@/components/icon';
 import { ThemedView } from '@/components/themed-view';
+import { useT } from '@/lib/i18n';
 
 export default function AlbumsScreen() {
+  const t = useT();
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <AppBar
-          title="Albums"
+          title={t('Albums')}
           leading="back"
           actions={
-            <>
-              <IconButton label="Search" onPress={() => router.push('/search')}>
-                <Icon ios="magnifyingglass" android="search" />
-              </IconButton>
-              <IconButton label="Open vault" onPress={() => router.push('/vault')}>
-                <Icon ios="lock" android="lock" />
-              </IconButton>
-            </>
+            <IconButton label={t('Search')} onPress={() => router.push('/search')}>
+              <Icon ios="magnifyingglass" android="search" />
+            </IconButton>
           }
         />
         <AlbumsOverview />

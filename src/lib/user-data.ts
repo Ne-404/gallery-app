@@ -1,8 +1,10 @@
 import { AppState, Platform } from 'react-native';
 
 import type { AccentName, Appearance } from '@/constants/theme';
+import type { LanguageSetting, Translator } from '@/lib/i18n';
 import { createStore } from '@/lib/create-store';
 import { dayKey } from '@/lib/dates';
+import { isDemoId, type DemoContent } from '@/lib/demo';
 import { isEdited, normalizeEdit, type Edit } from '@/lib/edits';
 import { sha256 } from '@/lib/sha256';
 import { storage } from '@/lib/storage';
@@ -16,12 +18,8 @@ export type Note = { text: string; updatedAt: number };
 export type CollectionEntry = { id: string; addedAt: number };
 export type Collection = { id: string; name: string; items: CollectionEntry[]; createdAt: number };
 export type ChallengeProgress = { startedAt: number; completedAt?: number };
-export type LibrarySource = 'device' | 'demo';
-export type VideoPlayer = 'builtin' | 'minimal' | 'external';
 /** A duplicate of a photo with its own edits (originals are never copied on disk). */
 export type MediaCopy = { id: string; sourceId: string; createdAt: number };
-/** A PDF imported into the reader. `uri` is a local file on device; web keeps the bytes in IndexedDB. */
-export type PdfDoc = { id: string; name: string; size: number; addedAt: number; uri: string; lastPage?: number };
 /** A regular (not private) folder of photos. A photo lives in at most one folder. */
 export type Folder = { id: string; name: string; itemIds: string[]; createdAt: number; hidden?: boolean };
 /** A note in the Notes app (photo notes stay in `notes`, keyed by photo). */
@@ -66,15 +64,17 @@ export type Settings = {
   challengeReminders: boolean;
   accent: AccentName;
   appearance: Appearance;
+  /** App language; `system` follows the device. */
+  language: LanguageSetting;
   /** Photo dates are hidden by default for privacy. */
   hideDates: boolean;
-  /** How videos play: the system controls, Gallery's minimal player, or another app. */
-  videoPlayer: VideoPlayer;
+  /** Videos keep playing when the app goes to the background. */
+  videoBackground: boolean;
+  /** Videos in the viewer start over when they end. */
+  videoLoop: boolean;
   /** Folders picked once and then scanned automatically (Android/iOS directory URIs). */
   musicFolder: string | null;
-  pdfFolder: string | null;
-  source: LibrarySource;
-  /** The demo-media banner on Home was closed; Settings still explains the library source. */
+  /** The camera-roll banner on Home was closed; Settings still explains the library source. */
   libraryBannerDismissed: boolean;
 };
 
@@ -89,23 +89,40 @@ export type UserData = {
   titles: Record<string, string>;
   /** Recently deleted: item id → when it was deleted. Restorable until deleted forever. */
   trash: Record<string, number>;
-  /** Items deleted forever (demo items, or device items whose removal failed). Never shown again. */
+  /** Items deleted forever (device items whose removal failed). Never shown again. */
   removed: string[];
   copies: MediaCopy[];
-  pdfs: PdfDoc[];
   tracks: Track[];
   folders: Folder[];
   journal: JournalNote[];
   stories: Story[];
   /** Starter stories are created once from the library, then left entirely to the user. */
   storiesSeeded: boolean;
+  /** Sample content is in (only while the camera roll isn't available). */
+  demoSeeded: boolean;
   profile: Profile;
   /** Saved items (everything in a collection) live in the vault; null until a passcode is set. */
   vault: VaultLock | null;
+  /** Where long videos were left off (item id → seconds), so they can resume. */
+  videoPositions: Record<string, number>;
   settings: Settings;
 };
 
+/** Only this many resume points are kept; the oldest go first. */
+const MAX_VIDEO_POSITIONS = 200;
+
 const STORAGE_KEY = 'user-data-v1';
+
+const DEFAULT_PROFILE: Profile = { name: 'My Gallery', username: '', bio: 'Private gallery · stored only on this device' };
+
+/** The profile as shown: the untouched default name and bio follow the app language. */
+export function displayProfile(profile: Profile, t: Translator) {
+  return {
+    ...profile,
+    name: profile.name === DEFAULT_PROFILE.name ? t('My Gallery') : profile.name,
+    bio: profile.bio === DEFAULT_PROFILE.bio ? t('Private gallery · stored only on this device') : profile.bio,
+  };
+}
 
 const DEFAULT_DATA: UserData = {
   likes: {},
@@ -118,38 +135,51 @@ const DEFAULT_DATA: UserData = {
   trash: {},
   removed: [],
   copies: [],
-  pdfs: [],
   tracks: [],
   folders: [],
   journal: [],
   stories: [],
   storiesSeeded: false,
-  profile: { name: 'My Gallery', username: '', bio: 'Private gallery · stored only on this device' },
+  demoSeeded: false,
+  profile: DEFAULT_PROFILE,
   vault: null,
+  videoPositions: {},
   settings: {
     memoryReminders: false,
     challengeReminders: false,
     accent: 'classic',
     appearance: 'system',
+    language: 'system',
     hideDates: true,
-    videoPlayer: 'builtin',
+    videoBackground: false,
+    videoLoop: true,
     musicFolder: null,
-    pdfFolder: null,
-    source: 'device',
     libraryBannerDismissed: false,
   },
 };
+
+/** Imported copies left over from the removed PDF reader. */
+export let legacyPdfUris: string[] = [];
 
 function load(): UserData {
   try {
     const raw = storage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_DATA;
-    const saved = JSON.parse(raw) as Partial<UserData>;
+    const { pdfs, ...saved } = JSON.parse(raw) as Partial<UserData> & { pdfs?: { uri: string }[] };
+    // The PDF reader was removed: its imported copies are deleted at startup.
+    legacyPdfUris = (pdfs ?? []).map((doc) => doc.uri);
+    // Settings of removed features (the PDF reader, the other video players) are dropped.
+    const {
+      pdfDark: _dark,
+      pdfFolder: _folder,
+      videoPlayer: _player,
+      ...settings
+    } = (saved.settings ?? {}) as Partial<Settings> & { pdfDark?: boolean; pdfFolder?: string | null; videoPlayer?: string };
     return {
       ...DEFAULT_DATA,
       ...saved,
       edits: Object.fromEntries(Object.entries(saved.edits ?? {}).map(([id, e]) => [id, normalizeEdit(e)])),
-      settings: { ...DEFAULT_DATA.settings, ...saved.settings },
+      settings: { ...DEFAULT_DATA.settings, ...settings },
       profile: { ...DEFAULT_DATA.profile, ...saved.profile },
     };
   } catch {
@@ -310,6 +340,17 @@ function randomSalt() {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/** Remembers where a video was left off; null forgets it (watched to the end, or barely started). */
+export function setVideoPosition(itemId: string, seconds: number | null) {
+  const positions = userData.get().videoPositions;
+  if (seconds === null ? !(itemId in positions) : positions[itemId] === seconds) return;
+  userData.set((d) => {
+    const { [itemId]: _, ...rest } = d.videoPositions;
+    const kept = Object.entries(rest).slice(-(MAX_VIDEO_POSITIONS - 1));
+    return { ...d, videoPositions: Object.fromEntries(seconds === null ? kept : [...kept, [itemId, seconds]]) };
+  });
+}
+
 export function setVaultPasscode(passcode: string) {
   const salt = randomSalt();
   userData.set((d) => ({
@@ -414,18 +455,6 @@ export function copyItem(itemId: string) {
   return id;
 }
 
-export function addPdf(doc: PdfDoc) {
-  userData.set((d) => ({ ...d, pdfs: [doc, ...d.pdfs] }));
-}
-
-export function updatePdf(pdfId: string, patch: Partial<PdfDoc>) {
-  userData.set((d) => ({ ...d, pdfs: d.pdfs.map((p) => (p.id === pdfId ? { ...p, ...patch } : p)) }));
-}
-
-export function removePdf(pdfId: string) {
-  userData.set((d) => ({ ...d, pdfs: d.pdfs.filter((p) => p.id !== pdfId) }));
-}
-
 const newId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
 export function createStory(title: string, itemIds: string[]) {
@@ -443,6 +472,52 @@ export function deleteStory(storyId: string) {
 }
 
 /** Creates the starter stories the first time the library loads. */
+/** Adds the sample notes, stories, folders, likes and songs, once. */
+export function seedDemoContent(demo: DemoContent) {
+  userData.set((d) =>
+    d.demoSeeded
+      ? d
+      : {
+          ...d,
+          demoSeeded: true,
+          likes: { ...demo.likes, ...d.likes },
+          notes: { ...demo.notes, ...d.notes },
+          titles: { ...demo.titles, ...d.titles },
+          journal: [...demo.journal, ...d.journal],
+          stories: [...demo.stories, ...d.stories],
+          folders: [...demo.folders, ...d.folders],
+          tracks: [...demo.tracks, ...d.tracks],
+        }
+  );
+}
+
+/** Removes every trace of the sample content, including what the user did with it. */
+export function clearDemoContent() {
+  const d = userData.get();
+  if (!d.demoSeeded && !d.copies.some((c) => isDemoId(c.sourceId))) return;
+  const keep = <T>(record: Record<string, T>) =>
+    Object.fromEntries(Object.entries(record).filter(([id]) => !isDemoId(id)));
+  const real = (ids: string[]) => ids.filter((id) => !isDemoId(id));
+  userData.set({
+    ...d,
+    demoSeeded: false,
+    likes: keep(d.likes),
+    notes: keep(d.notes),
+    titles: keep(d.titles),
+    edits: keep(d.edits),
+    trash: keep(d.trash),
+    videoPositions: keep(d.videoPositions),
+    removed: real(d.removed),
+    copies: d.copies.filter((c) => !isDemoId(c.sourceId)),
+    journal: d.journal.filter((n) => !isDemoId(n.id)).map((n) => ({ ...n, itemIds: real(n.itemIds) })),
+    stories: d.stories.filter((s) => !isDemoId(s.id)).map((s) => ({ ...s, itemIds: real(s.itemIds) })),
+    folders: d.folders.filter((f) => !isDemoId(f.id)).map((f) => ({ ...f, itemIds: real(f.itemIds) })),
+    tracks: d.tracks.filter((t) => !isDemoId(t.id)),
+    collections: d.collections.map((c) => ({ ...c, items: c.items.filter((e) => !isDemoId(e.id)) })),
+    profile: d.profile.avatarId && isDemoId(d.profile.avatarId) ? { ...d.profile, avatarId: undefined } : d.profile,
+  });
+}
+
 export function seedStories(stories: { title: string; itemIds: string[] }[]) {
   userData.set((d) =>
     d.storiesSeeded

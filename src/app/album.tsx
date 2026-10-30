@@ -10,6 +10,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useGallery } from '@/hooks/use-gallery';
+import { useT } from '@/lib/i18n';
 import { deleteFromDevice } from '@/lib/media';
 import { scopeTitle, type Scope } from '@/lib/scopes';
 import { confirmAction } from '@/lib/ui';
@@ -20,6 +21,7 @@ export default function AlbumScreen() {
   const { scope = 'all' } = useLocalSearchParams<{ scope?: Scope }>();
   const { data, scoped } = useGallery();
   const unlocked = useVaultUnlocked();
+  const t = useT();
   const [oldestFirst, setOldestFirst] = useState(false);
   const scopedItems = scoped(scope);
   const items = oldestFirst ? [...scopedItems].reverse() : scopedItems;
@@ -30,31 +32,31 @@ export default function AlbumScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <AppBar
-          title={scopeTitle(scope, data)}
+          title={scopeTitle(scope, data, t)}
           leading="back"
           actions={
             <>
               <IconButton
-                label={oldestFirst ? 'Show newest first' : 'Show oldest first'}
+                label={oldestFirst ? t('Show newest first') : t('Show oldest first')}
                 onPress={() => setOldestFirst((o) => !o)}>
                 <Icon ios="arrow.up.arrow.down" android="swap_vert" />
               </IconButton>
               {scope === 'trash' && items.length > 0 && (
               <>
                 <IconButton
-                  label="Restore all"
+                  label={t('Restore all')}
                   onPress={() => {
                     restoreItems(items.map((i) => i.id));
                   }}>
                   <Icon ios="arrow.uturn.backward" android="restore" />
                 </IconButton>
                 <IconButton
-                  label="Empty"
+                  label={t('Empty')}
                   onPress={() =>
                     confirmAction(
-                      'Delete everything forever?',
-                      `${items.length} ${items.length === 1 ? 'item' : 'items'} will be deleted. This can’t be undone.`,
-                      'Delete all',
+                      t('Delete everything forever?'),
+                      t.n(items.length, '{n} item will be deleted. This can’t be undone.', '{n} items will be deleted. This can’t be undone.'),
+                      t('Delete all'),
                       async () => {
                         const ids = items.map((i) => i.id);
                         await deleteFromDevice(ids);
@@ -70,8 +72,8 @@ export default function AlbumScreen() {
           }
         />
         <ThemedText type="small" themeColor="textSecondary" style={styles.count}>
-          {items.length} {items.length === 1 ? 'item' : 'items'} · {oldestFirst ? 'oldest first' : 'newest first'}
-          {scope === 'trash' ? ` · removed after ${TRASH_DAYS} days` : ''}
+          {t.n(items.length, '{n} item', '{n} items')} · {oldestFirst ? t('oldest first') : t('newest first')}
+          {scope === 'trash' ? ` · ${t('removed after {n} days', { n: TRASH_DAYS })}` : ''}
         </ThemedText>
         <MediaGrid
           key={oldestFirst ? 'oldest' : 'newest'}
@@ -82,8 +84,8 @@ export default function AlbumScreen() {
           empty={
             <ThemedText themeColor="textSecondary" style={styles.empty}>
               {scope === 'trash'
-                ? 'Nothing deleted. Deleted photos wait here so you can restore them.'
-                : 'Nothing here yet.'}
+                ? t('Nothing deleted. Deleted photos wait here so you can restore them.')
+                : t('Nothing here yet.')}
             </ThemedText>
           }
         />

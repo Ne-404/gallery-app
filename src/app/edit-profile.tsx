@@ -8,12 +8,14 @@ import { AppBar, IconButton } from '@/components/app-bar';
 import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { MaxFeedWidth, Spacing } from '@/constants/theme';
 import { useAppWidth } from '@/hooks/use-app-width';
 import { useAccent, useGallery } from '@/hooks/use-gallery';
 import { useTheme } from '@/hooks/use-theme';
-import { updateProfile } from '@/lib/user-data';
+import { useT } from '@/lib/i18n';
+import { displayProfile, updateProfile } from '@/lib/user-data';
 
+/** Columns on a phone; tablets add more so tiles stay thumbnail-sized. */
 const COLUMNS = 4;
 const GAP = 2;
 const AVATAR = 96;
@@ -23,19 +25,22 @@ export default function EditProfileScreen() {
   const { library, itemsById, data } = useGallery();
   const accent = useAccent();
   const theme = useTheme();
+  const t = useT();
   const width = useAppWidth();
-  const [name, setName] = useState(data.profile.name);
-  const [username, setUsername] = useState(data.profile.username);
-  const [bio, setBio] = useState(data.profile.bio);
+  const profile = displayProfile(data.profile, t);
+  const [name, setName] = useState(profile.name);
+  const [username, setUsername] = useState(profile.username);
+  const [bio, setBio] = useState(profile.bio);
   const [avatarId, setAvatarId] = useState(data.profile.avatarId);
   const [picking, setPicking] = useState(false);
   const avatar = avatarId ? itemsById.get(avatarId) : undefined;
-  const tile = (width - GAP * (COLUMNS - 1)) / COLUMNS;
+  const columns = Math.max(COLUMNS, Math.round(width / 100));
+  const tile = (width - GAP * (columns - 1)) / columns;
 
   const close = () => (router.canGoBack() ? router.back() : router.replace('/profile'));
   const save = () => {
     updateProfile({
-      name: name.trim() || 'My Gallery',
+      name: name.trim() || t('My Gallery'),
       username: username.trim().replace(/^@/, '').replace(/\s+/g, '_').toLowerCase(),
       bio: bio.trim(),
       avatarId,
@@ -49,7 +54,7 @@ export default function EditProfileScreen() {
         onPress={() => {
           setPicking((p) => !p);
         }}
-        accessibilityLabel="Change profile photo"
+        accessibilityLabel={t('Change profile photo')}
         style={styles.avatarBlock}>
         <View style={[styles.avatarRing, { borderColor: accent }]}>
           {avatar ? (
@@ -61,19 +66,26 @@ export default function EditProfileScreen() {
           )}
         </View>
         <ThemedText type="smallBold" style={{ color: accent }}>
-          {picking ? 'Choose a photo below' : 'Change photo'}
+          {picking ? t('Choose a photo below') : t('Change photo')}
         </ThemedText>
       </Pressable>
 
       {!picking && (
         <>
-          <Field label="Name" value={name} onChange={setName} placeholder="Your name" maxLength={40} />
-          <Field label="Username" value={username} onChange={setUsername} placeholder="username" maxLength={30} prefix="@" />
-          <Field label="Bio" value={bio} onChange={setBio} placeholder="A line about you" maxLength={150} multiline />
+          <Field label={t('Name')} value={name} onChange={setName} placeholder={t('Your name')} maxLength={40} />
+          <Field
+            label={t('Username')}
+            value={username}
+            onChange={setUsername}
+            placeholder={t('username')}
+            maxLength={30}
+            prefix="@"
+          />
+          <Field label={t('Bio')} value={bio} onChange={setBio} placeholder={t('A line about you')} maxLength={150} multiline />
           {avatarId && (
             <Pressable onPress={() => setAvatarId(undefined)} style={styles.reset}>
               <ThemedText type="small" themeColor="textSecondary">
-                Use my top favorite as the picture instead
+                {t('Use my top favorite as the picture instead')}
               </ThemedText>
             </Pressable>
           )}
@@ -86,10 +98,10 @@ export default function EditProfileScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <AppBar
-          title="Edit profile"
+          title={t('Edit profile')}
           leading="close"
           actions={
-            <IconButton label="Save profile" onPress={save}>
+            <IconButton label={t('Save profile')} onPress={save}>
               <Icon ios="checkmark" android="check" color={accent} />
             </IconButton>
           }
@@ -97,7 +109,9 @@ export default function EditProfileScreen() {
         <FlatList
           data={picking ? library.items.filter((i) => i.type === 'photo') : []}
           keyExtractor={(item) => item.id}
-          numColumns={COLUMNS}
+          // numColumns can't change on a mounted list.
+          key={columns}
+          numColumns={columns}
           columnWrapperStyle={styles.gridRow}
           ListHeaderComponent={form}
           // Rows, not tiles (numColumns): one screenful, so opening doesn't load every thumbnail.
@@ -109,7 +123,7 @@ export default function EditProfileScreen() {
                 setAvatarId(item.id);
                 setPicking(false);
               }}
-              accessibilityLabel="Use as profile photo"
+              accessibilityLabel={t('Use as profile photo')}
               style={{ width: tile, height: tile }}>
               <Image source={{ uri: item.thumbUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
               {item.id === avatarId && <View style={[StyleSheet.absoluteFill, styles.chosen, { borderColor: accent }]} />}
@@ -171,6 +185,9 @@ const styles = StyleSheet.create({
   form: {
     padding: Spacing.three,
     gap: Spacing.three,
+    width: '100%',
+    maxWidth: MaxFeedWidth,
+    alignSelf: 'center',
   },
   avatarBlock: {
     alignItems: 'center',

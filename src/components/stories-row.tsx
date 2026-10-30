@@ -7,6 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useAccent } from '@/hooks/use-gallery';
 import { useTheme } from '@/hooks/use-theme';
+import { useT } from '@/lib/i18n';
 import type { Reel } from '@/lib/reels';
 
 /**
@@ -16,6 +17,7 @@ import type { Reel } from '@/lib/reels';
 export function StoriesRow({ reels, size = 62 }: { reels: Reel[]; size?: number }) {
   const accent = useAccent();
   const theme = useTheme();
+  const t = useT();
   const ring = { padding: 2, borderRadius: (size + 10) / 2, borderWidth: 2.5 };
   const image = { width: size, height: size, borderRadius: size / 2 };
 
@@ -23,7 +25,7 @@ export function StoriesRow({ reels, size = 62 }: { reels: Reel[]; size?: number 
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
       <Pressable
         onPress={() => router.push('/story')}
-        accessibilityLabel="New story"
+        accessibilityLabel={t('New story')}
         style={({ pressed }) => [styles.story, { width: size + 10 }, pressed && styles.pressed]}>
         <View style={[ring, { borderColor: 'transparent' }]}>
           <View style={[image, styles.newBubble, { borderColor: theme.textSecondary }]}>
@@ -31,14 +33,14 @@ export function StoriesRow({ reels, size = 62 }: { reels: Reel[]; size?: number 
           </View>
         </View>
         <ThemedText numberOfLines={1} style={styles.label}>
-          New
+          {t('New')}
         </ThemedText>
       </Pressable>
       {reels.map((reel) => (
         <Pressable
           key={reel.id}
-          accessibilityLabel={`Story: ${reel.title}`}
-          accessibilityHint="Hold to edit"
+          accessibilityLabel={t('Story: {name}', { name: reel.title })}
+          accessibilityHint={t('Hold to edit')}
           onPress={() => router.push({ pathname: '/stories', params: { reel: reel.id } })}
           onLongPress={() => {
             router.push({ pathname: '/story', params: { id: reel.id } });

@@ -1,3 +1,4 @@
+import type { Translator } from '@/lib/i18n';
 import type { JournalNote, NoteColor, UserData } from '@/lib/user-data';
 
 /** Card tints, applied over the theme background so they work in light and dark themes. */
@@ -16,13 +17,13 @@ export type NoteEntry =
   | { kind: 'photo'; id: string; itemId: string; title: string; body: string; updatedAt: number; pinned: false };
 
 /** Notes for the Notes list. Notes on vault photos stay in the vault, so they're left out. */
-export function noteEntries(data: UserData, isVaulted: (id: string) => boolean): NoteEntry[] {
+export function noteEntries(data: UserData, isVaulted: (id: string) => boolean, t: Translator): NoteEntry[] {
   const journal = data.journal.map(
     (note): NoteEntry => ({
       kind: 'journal',
       id: note.id,
       note,
-      title: note.title || firstLine(note.body) || 'New note',
+      title: note.title || firstLine(note.body) || t('New note'),
       body: note.title ? note.body : note.body.split('\n').slice(1).join('\n'),
       updatedAt: note.updatedAt,
       pinned: note.pinned,
@@ -35,7 +36,7 @@ export function noteEntries(data: UserData, isVaulted: (id: string) => boolean):
       kind: 'photo',
       id: `photo:${itemId}`,
       itemId,
-      title: data.titles[itemId] ?? 'Photo note',
+      title: data.titles[itemId] ?? t('Photo note'),
       body: note.text,
       updatedAt: note.updatedAt,
       pinned: false,

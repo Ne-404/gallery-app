@@ -7,10 +7,11 @@ import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Vinyl } from '@/components/vinyl';
-import { Spacing } from '@/constants/theme';
+import { MaxFeedWidth, Spacing } from '@/constants/theme';
 import { useAccent } from '@/hooks/use-gallery';
 import { useTheme } from '@/hooks/use-theme';
-import { next, SAMPLE_TRACKS, togglePlay, useDetectedTracks, useMusic } from '@/lib/music';
+import { useT } from '@/lib/i18n';
+import { next, togglePlay, trackLabels, useDetectedTracks, useMusic } from '@/lib/music';
 import { useUserData } from '@/lib/user-data';
 
 /** Height of the bar, so overlays (toasts) can sit above it. */
@@ -28,8 +29,10 @@ export function MiniPlayer() {
   const insets = useSafeAreaInsets();
   const accent = useAccent();
   const theme = useTheme();
-  const track = [...imported, ...onDevice, ...SAMPLE_TRACKS].find((t) => t.id === music.currentId);
+  const t = useT();
+  const track = [...imported, ...onDevice].find((entry) => entry.id === music.currentId);
   if (!track || pathname === '/music') return null;
+  const labels = trackLabels(track, t);
   const progress = music.duration ? Math.min(1, music.position / music.duration) : 0;
 
   return (
@@ -37,21 +40,24 @@ export function MiniPlayer() {
       entering={FadeInDown.duration(180)}
       exiting={FadeOutDown.duration(150)}
       style={[styles.wrap, { bottom: insets.bottom + Spacing.three + 68 + Spacing.two }]}>
-      <Pressable onPress={() => router.navigate('/music')} accessibilityLabel={`Now playing: ${track.title}. Open music`}>
+      <Pressable
+        onPress={() => router.navigate('/music')}
+        accessibilityLabel={t('Now playing: {name}. Open music', { name: labels.title })}
+        style={styles.inner}>
         <ThemedView type="backgroundElement" style={[styles.bar, theme.outline === 0 && styles.shadow]}>
           <Vinyl size={34} color={accent} spinning={music.playing} />
           <View style={styles.text}>
             <ThemedText type="smallBold" numberOfLines={1}>
-              {track.title}
+              {labels.title}
             </ThemedText>
             <ThemedText type="small" themeColor="textSecondary" numberOfLines={1} style={styles.artist}>
-              {track.artist}
+              {labels.artist}
             </ThemedText>
           </View>
-          <Pressable onPress={togglePlay} hitSlop={8} accessibilityLabel={music.playing ? 'Pause' : 'Play'} style={styles.button}>
+          <Pressable onPress={togglePlay} hitSlop={8} accessibilityLabel={music.playing ? t('Pause') : t('Play')} style={styles.button}>
             <Icon ios={music.playing ? 'pause.fill' : 'play.fill'} android={music.playing ? 'pause' : 'play_arrow'} size={24} />
           </Pressable>
-          <Pressable onPress={next} hitSlop={8} accessibilityLabel="Next song" style={styles.button}>
+          <Pressable onPress={next} hitSlop={8} accessibilityLabel={t('Next song')} style={styles.button}>
             <Icon ios="forward.fill" android="skip_next" size={22} />
           </Pressable>
           <View style={[styles.progress, { width: `${progress * 100}%`, backgroundColor: accent }]} />
@@ -66,6 +72,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: Spacing.three,
     right: Spacing.three,
+    alignItems: 'center',
+  },
+  // On tablets the bar stays phone-sized, centered over the tab bar.
+  inner: {
+    width: '100%',
+    maxWidth: MaxFeedWidth,
   },
   bar: {
     height: MINI_PLAYER_HEIGHT,

@@ -7,6 +7,8 @@ import '@/global.css';
 
 import { Platform } from 'react-native';
 
+import type { TKey } from '@/lib/i18n';
+
 export const Colors = {
   light: {
     text: '#000000',
@@ -33,15 +35,6 @@ export const Colors = {
     textSecondary: '#3B3B3B',
     border: '#000000',
   },
-  /** Gothic hunter's night: soot black, bone-white type, dried-blood red, tarnished bronze. */
-  gothic: {
-    text: '#E8DCC4',
-    background: '#0B0908',
-    backgroundElement: '#17110F',
-    backgroundSelected: '#2B1D18',
-    textSecondary: '#9C8C74',
-    border: '#5A4630',
-  },
   /** Pop art comic: Ben-Day yellow, ink outlines, primary red and cyan. */
   pop: {
     text: '#111111',
@@ -51,23 +44,14 @@ export const Colors = {
     textSecondary: '#2A2A2A',
     border: '#111111',
   },
-  /** Windows 98: silver windows on a teal desktop, beveled edges, navy selection. */
-  win98: {
-    text: '#000000',
-    background: '#C0C0C0',
-    backgroundElement: '#DFDFDF',
-    backgroundSelected: '#A6CAF0',
-    textSecondary: '#404040',
-    border: '#808080',
-  },
-  /** Windows 98 "High Contrast Black": white type and outlines on black, cyan highlights. */
-  contrast: {
-    text: '#FFFFFF',
-    background: '#000000',
-    backgroundElement: '#000000',
-    backgroundSelected: '#800080',
-    textSecondary: '#C0C0C0',
-    border: '#FFFFFF',
+  /** Pirate's night at sea: deep-water navy, parchment type, brass trim, doubloon gold. */
+  pirate: {
+    text: '#F2E3C2',
+    background: '#0A1822',
+    backgroundElement: '#11283A',
+    backgroundSelected: '#1D3D55',
+    textSecondary: '#A9B4AE',
+    border: '#8C6B2E',
   },
 } as const;
 
@@ -87,14 +71,12 @@ type ThemeTokens = {
   accent: string | undefined;
   /** Color behind the phone frame on desktop browsers. */
   desk: string;
-  /** Windows 98 look: Tahoma type, near-square corners, a taskbar-style tab bar. */
-  retro: boolean;
 };
 
 /** Non-color tokens per theme. */
 export const ThemeStyles: Record<ThemeName, ThemeTokens> = {
-  light: { brutal: false, dark: false, outline: 0, shadow: undefined, serif: false, accent: undefined, desk: '#E9EBEF', retro: false },
-  dark: { brutal: false, dark: true, outline: 0, shadow: undefined, serif: false, accent: undefined, desk: '#111214', retro: false },
+  light: { brutal: false, dark: false, outline: 0, shadow: undefined, serif: false, accent: undefined, desk: '#E9EBEF' },
+  dark: { brutal: false, dark: true, outline: 0, shadow: undefined, serif: false, accent: undefined, desk: '#111214' },
   brutal: {
     brutal: true,
     dark: false,
@@ -103,17 +85,6 @@ export const ThemeStyles: Record<ThemeName, ThemeTokens> = {
     serif: false,
     accent: undefined,
     desk: '#FFD23F',
-    retro: false,
-  },
-  gothic: {
-    brutal: false,
-    dark: true,
-    outline: 1,
-    shadow: '0px 6px 20px rgba(120, 8, 8, 0.35)',
-    serif: true,
-    accent: '#A4161A',
-    desk: '#1A0A0A',
-    retro: false,
   },
   pop: {
     brutal: true,
@@ -123,43 +94,28 @@ export const ThemeStyles: Record<ThemeName, ThemeTokens> = {
     serif: false,
     accent: '#E4002B',
     desk: '#3EC6F0',
-    retro: false,
   },
-  win98: {
-    brutal: false,
-    dark: false,
-    outline: 1,
-    // Raised bevel: light top-left edge, dark bottom-right edge.
-    shadow: 'inset 1px 1px 0px #FFFFFF, inset -1px -1px 0px #808080, 1px 1px 0px #000000',
-    serif: false,
-    accent: '#000080',
-    desk: '#008080',
-    retro: true,
-  },
-  contrast: {
+  pirate: {
     brutal: false,
     dark: true,
-    outline: 2,
-    shadow: undefined,
-    serif: false,
-    accent: '#00FFFF',
-    desk: '#000000',
-    retro: true,
+    outline: 1,
+    shadow: '0px 6px 22px rgba(212, 165, 55, 0.18)',
+    serif: true,
+    accent: '#D4A537',
+    desk: '#061019',
   },
 };
 
 export type Appearance = 'system' | ThemeName;
 
 /** Every appearance, in theme-wheel order, with the two colors its swatch shows. */
-export const Appearances: { id: Appearance; label: string; swatch: [string, string] }[] = [
+export const Appearances: { id: Appearance; label: TKey; swatch: [string, string] }[] = [
   { id: 'system', label: 'System', swatch: ['#ffffff', '#000000'] },
   { id: 'light', label: 'Light', swatch: ['#ffffff', '#E0E1E6'] },
   { id: 'dark', label: 'Dark', swatch: ['#000000', '#2E3135'] },
   { id: 'brutal', label: 'Brutal', swatch: ['#FFF4D6', '#FFD23F'] },
-  { id: 'gothic', label: 'Blood Moon', swatch: ['#0B0908', '#A4161A'] },
   { id: 'pop', label: 'Pop Art', swatch: ['#FFE94A', '#E4002B'] },
-  { id: 'win98', label: 'Windows 98', swatch: ['#C0C0C0', '#000080'] },
-  { id: 'contrast', label: 'High Contrast', swatch: ['#000000', '#00FFFF'] },
+  { id: 'pirate', label: 'Pirate', swatch: ['#0A1822', '#D4A537'] },
 ];
 
 /** App accent themes. Everything except `classic` is unlocked by completing challenges. */
@@ -185,21 +141,18 @@ export const Fonts = Platform.select({
     rounded: 'ui-rounded',
     /** iOS `UIFontDescriptorSystemDesignMonospaced` */
     mono: 'ui-monospace',
-    retro: 'Verdana',
   },
   default: {
     sans: 'normal',
     serif: 'serif',
     rounded: 'normal',
     mono: 'monospace',
-    retro: 'sans-serif',
   },
   web: {
     sans: 'var(--font-display)',
     serif: 'var(--font-serif)',
     rounded: 'var(--font-rounded)',
     mono: 'var(--font-mono)',
-    retro: 'var(--font-retro)',
   },
 });
 
@@ -216,6 +169,8 @@ export const Spacing = {
 /** Bottom padding that keeps scrolling content clear of the floating tab bar. */
 export const BottomTabInset = 104;
 export const MaxContentWidth = 800;
+/** Feeds, players and pickers stop growing at this width; wider screens center them. */
+export const MaxFeedWidth = 600;
 
 /** On web the app renders inside a phone-sized frame (Pixel-class width). */
 export const FrameWidth = 412;

@@ -21,12 +21,13 @@ import { Vinyl } from '@/components/vinyl';
 import { Spacing } from '@/constants/theme';
 import { useAccent } from '@/hooks/use-gallery';
 import { useTheme } from '@/hooks/use-theme';
+import { useIsRTL, useT, type TKey } from '@/lib/i18n';
 import { isSwipeBlocked } from '@/lib/ui';
 
 const TABS: {
   name: string;
   href: '/' | '/music' | '/reels' | '/profile';
-  label: string;
+  label: TKey;
   icon: { ios: SFSymbol; iosActive: SFSymbol; android: AndroidSymbol };
 }[] = [
   { name: 'index', href: '/', label: 'Home', icon: { ios: 'house', iosActive: 'house.fill', android: 'home' } },
@@ -57,13 +58,15 @@ const TABS: {
  */
 export default function AppTabs() {
   const pathname = usePathname();
+  // Tabs run right to left in Arabic, so the swipe that reveals the next tab flips too.
+  const forward = useIsRTL() ? -1 : 1;
   const current = Math.max(0, TABS.findIndex((t) => t.href === pathname));
   const go = (step: number) => {
     const next = TABS[current + step];
     if (next) router.navigate(next.href);
   };
   const swipeTo = (step: number) => {
-    if (!isSwipeBlocked()) go(step);
+    if (!isSwipeBlocked()) go(step * forward);
   };
 
   // Slide left or right anywhere on a tab to move to the neighbouring tab. It only starts
@@ -111,7 +114,6 @@ function NavigationBar({ children, ...props }: { children: React.ReactNode }) {
         { bottom: insets.bottom + Spacing.three },
         theme.outline === 0 && { boxShadow: theme.dark ? '0px 8px 28px rgba(0,0,0,0.6)' : '0px 8px 28px rgba(0,0,0,0.16)' },
         theme.brutal && styles.barBrutal,
-        theme.retro && styles.barRetro,
       ]}>
       {children}
     </ThemedView>
@@ -123,8 +125,9 @@ function NavItem({
   icon,
   isFocused,
   onPress,
-}: TabTriggerSlotProps & { label: string; icon: (typeof TABS)[number]['icon'] }) {
+}: TabTriggerSlotProps & { label: TKey; icon: (typeof TABS)[number]['icon'] }) {
   const theme = useTheme();
+  const t = useT();
   const accent = useAccent();
   const jump = useSharedValue(0);
 
@@ -144,14 +147,12 @@ function NavItem({
       style={styles.item}
       accessibilityRole="tab"
       accessibilityState={{ selected: isFocused }}
-      accessibilityLabel={label}>
+      accessibilityLabel={t(label)}>
       <Animated.View
         style={[
           styles.indicator,
           isFocused && { backgroundColor: theme.brutal ? accent : `${accent}2E` },
           isFocused && theme.brutal && { borderWidth: 2, borderColor: theme.border },
-          theme.retro && styles.indicatorRetro,
-          isFocused && theme.retro && { backgroundColor: theme.backgroundSelected, boxShadow: sunken },
           jumpStyle,
         ]}>
         {label === 'Music' ? (
@@ -168,13 +169,11 @@ function NavItem({
       </Animated.View>
       <ThemedText
         style={[styles.label, { color: isFocused ? theme.text : theme.textSecondary }, isFocused && styles.labelActive]}>
-        {label}
+        {t(label)}
       </ThemedText>
     </Pressable>
   );
 }
-
-const sunken = 'inset 1px 1px 0px #808080, inset -1px -1px 0px #FFFFFF';
 
 const styles = StyleSheet.create({
   root: {
@@ -194,13 +193,6 @@ const styles = StyleSheet.create({
   },
   barBrutal: {
     borderRadius: 18,
-  },
-  // Windows 98: the tab bar becomes a taskbar, with the active tab pressed in.
-  barRetro: {
-    borderRadius: 2,
-  },
-  indicatorRetro: {
-    borderRadius: 1,
   },
   item: {
     flex: 1,

@@ -12,6 +12,8 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useAccent } from '@/hooks/use-gallery';
 import { useTheme } from '@/hooks/use-theme';
+import { dirProps, dirStyle } from '@/lib/direction';
+import { useT } from '@/lib/i18n';
 
 export const PASSCODE_LENGTH = 4;
 
@@ -30,6 +32,7 @@ type PinPadProps = {
 /** Lock-screen style passcode entry. Also accepts the number keys on web. */
 export function PinPad({ title, subtitle, error, attempt = 0, onComplete }: PinPadProps) {
   const theme = useTheme();
+  const t = useT();
   const accent = useAccent();
   const [digits, setDigits] = useState('');
   const shake = useSharedValue(0);
@@ -99,13 +102,13 @@ export function PinPad({ title, subtitle, error, attempt = 0, onComplete }: PinP
         ))}
       </Animated.View>
 
-      <View style={styles.pad}>
+      <View {...dirProps('ltr')} style={[styles.pad, dirStyle('ltr')]}>
         {KEYS.map((key, i) =>
           key ? (
             <Pressable
               key={key}
               onPress={() => press(key)}
-              accessibilityLabel={key === 'delete' ? 'Delete digit' : key}
+              accessibilityLabel={key === 'delete' ? t('Delete digit') : key}
               style={({ pressed }) => [
                 styles.key,
                 key !== 'delete' && { backgroundColor: theme.backgroundElement },
@@ -159,6 +162,7 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     borderWidth: 1.5,
   },
+  // Keypads read 1-2-3 left to right in every language.
   pad: {
     flexDirection: 'row',
     flexWrap: 'wrap',

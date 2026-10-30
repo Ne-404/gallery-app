@@ -2,9 +2,11 @@ import { loadAsync } from 'expo-font';
 import { SymbolView, type AndroidSymbol, type SFSymbol } from 'expo-symbols';
 import { Text, View, type ColorValue, type StyleProp, type ViewStyle } from 'react-native';
 
+import { isDirectional, mirrorStyle } from '@/components/icon-direction';
 import WebIcons from '@/constants/web-icons.json';
 import { useTheme } from '@/hooks/use-theme';
 import { createStore } from '@/lib/create-store';
+import { useIsRTL } from '@/lib/i18n';
 
 type IconProps = {
   ios: SFSymbol;
@@ -33,12 +35,20 @@ export function Icon({ ios, android, size = 22, color, style }: IconProps) {
   const theme = useTheme();
   const ready = useFontReady();
   const codepoint = codepoints[android];
+  const mirrored = useIsRTL() && isDirectional(android);
 
   if (codepoint === undefined) {
-    return <SymbolView name={{ ios, android, web: android }} size={size} tintColor={color ?? theme.text} style={style} />;
+    return (
+      <SymbolView
+        name={{ ios, android, web: android }}
+        size={size}
+        tintColor={color ?? theme.text}
+        style={[style, mirrored && mirrorStyle]}
+      />
+    );
   }
   return (
-    <View style={[{ width: size, height: size }, style]}>
+    <View style={[{ width: size, height: size }, style, mirrored && mirrorStyle]}>
       {ready && (
         <Text
           aria-hidden

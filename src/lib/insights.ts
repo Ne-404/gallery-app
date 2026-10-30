@@ -1,9 +1,10 @@
 import { DAY_MS, dayKey, isWeekend, startOfDay } from '@/lib/dates';
+import { dateLocale, type Translator } from '@/lib/i18n';
 import type { MediaItem } from '@/lib/media';
 
 export type DayCount = { key: string; label: string; count: number };
 
-export function computeInsights(items: MediaItem[], openDays: string[], now = Date.now()) {
+export function computeInsights(items: MediaItem[], openDays: string[], t: Translator, now = Date.now()) {
   const today = startOfDay(now);
   const perDay = new Map<string, number>();
   for (const item of items) {
@@ -13,11 +14,11 @@ export function computeInsights(items: MediaItem[], openDays: string[], now = Da
 
   const lastDays = (count: number): DayCount[] =>
     Array.from({ length: count }, (_, i) => {
-      const t = today - (count - 1 - i) * DAY_MS;
-      const key = dayKey(t);
+      const day = today - (count - 1 - i) * DAY_MS;
+      const key = dayKey(day);
       return {
         key,
-        label: new Date(t).toLocaleDateString(undefined, { weekday: 'narrow' }),
+        label: new Date(day).toLocaleDateString(dateLocale(t.language), { weekday: 'narrow' }),
         count: perDay.get(key) ?? 0,
       };
     });
@@ -53,19 +54,22 @@ export function computeInsights(items: MediaItem[], openDays: string[], now = Da
     counts,
     clutter,
     cleanliness,
-    headline: headline(weekTotal, weekendShare),
+    headline: headline(weekTotal, weekendShare, t),
     captureStreak: streak((key) => perDay.has(key), today),
     openStreak: streak((key) => openDays.includes(key), today),
     activeDays: heatmap.filter((d) => d.count > 0).length,
   };
 }
 
-function headline(weekTotal: number, weekendShare: number) {
-  if (weekTotal === 0) return 'A quiet week. Your camera is waiting for the next moment.';
-  const moments = `You captured ${weekTotal} ${weekTotal === 1 ? 'photo' : 'photos'} this week`;
-  if (weekendShare > 0.5) return `${moments}, mostly on weekends!`;
-  if (weekendShare < 0.2) return `${moments}, mostly on weekdays.`;
-  return `${moments}, spread across the week.`;
+function headline(weekTotal: number, weekendShare: number, t: Translator) {
+  if (weekTotal === 0) return t('A quiet week. Your camera is waiting for the next moment.');
+  if (weekendShare > 0.5) {
+    return t.n(weekTotal, 'You captured {n} photo this week, mostly on weekends!', 'You captured {n} photos this week, mostly on weekends!');
+  }
+  if (weekendShare < 0.2) {
+    return t.n(weekTotal, 'You captured {n} photo this week, mostly on weekdays.', 'You captured {n} photos this week, mostly on weekdays.');
+  }
+  return t.n(weekTotal, 'You captured {n} photo this week, spread across the week.', 'You captured {n} photos this week, spread across the week.');
 }
 
 /** Consecutive days (ending today, or yesterday if today has nothing yet). */

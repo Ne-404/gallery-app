@@ -13,28 +13,30 @@ import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useAccent, useGallery } from '@/hooks/use-gallery';
 import { useTheme } from '@/hooks/use-theme';
+import { useT, type TKey } from '@/lib/i18n';
 import { computeInsights } from '@/lib/insights';
-import { scopeItems, type Scope } from '@/lib/scopes';
+import type { Scope } from '@/lib/scopes';
+import { displayProfile } from '@/lib/user-data';
 
-const TABS: { scope: Scope; icon: { ios: 'square.grid.3x3' | 'heart' | 'lock' | 'text.bubble'; android: 'grid_on' | 'favorite_border' | 'lock' | 'chat_bubble' }; empty: string }[] = [
+// The vault isn't here: it's only reached from the side panel.
+const TABS: { scope: Scope; icon: { ios: 'square.grid.3x3' | 'heart' | 'text.bubble'; android: 'grid_on' | 'favorite_border' | 'chat_bubble' }; empty: TKey }[] = [
   { scope: 'all', icon: { ios: 'square.grid.3x3', android: 'grid_on' }, empty: 'No photos yet.' },
   { scope: 'liked', icon: { ios: 'heart', android: 'favorite_border' }, empty: 'Double-tap a photo to like it.' },
-  // Saved items live in the vault, which has its own passcode screen.
-  { scope: 'saved', icon: { ios: 'lock', android: 'lock' }, empty: '' },
   { scope: 'notes', icon: { ios: 'text.bubble', android: 'chat_bubble' }, empty: 'Your journal notes will appear here.' },
 ];
 
 export default function ProfileScreen() {
-  const { library, data, reels, challenges, itemCount, vaultCount, itemsById, isVaulted } = useGallery();
+  const { library, data, reels, challenges, itemCount, itemsById, isVaulted, scoped } = useGallery();
   const accent = useAccent();
   const theme = useTheme();
+  const t = useT();
   const [tab, setTab] = useState<Scope>('all');
-  const insights = computeInsights(library.items, data.openDays);
-  const { profile } = data;
+  const insights = computeInsights(library.items, data.openDays, t);
+  const profile = displayProfile(data.profile, t);
   // The chosen picture, or the top favorite until one is chosen.
   const picture =
     (profile.avatarId && !isVaulted(profile.avatarId) && itemsById.get(profile.avatarId)) ||
-    scopeItems('liked', library.items, data)[0] ||
+    scoped('liked')[0] ||
     library.items[0];
   const badges = challenges.filter((c) => c.state === 'completed').length;
 
@@ -49,9 +51,9 @@ export default function ProfileScreen() {
           )}
         </View>
         <View style={styles.stats}>
-          <Stat value={itemCount} label="items" />
-          <Stat value={Object.keys(data.likes).length} label="likes" />
-          <Stat value={vaultCount} label="in vault" />
+          <Stat value={itemCount} label={t('items')} />
+          <Stat value={Object.keys(data.likes).length} label={t('likes')} />
+          <Stat value={reels.length} label={t('stories')} />
         </View>
       </View>
 
@@ -59,13 +61,13 @@ export default function ProfileScreen() {
         <ThemedText type="smallBold">{profile.name}</ThemedText>
         {profile.bio ? <ThemedText type="small">{profile.bio}</ThemedText> : null}
         <ThemedText type="small" themeColor="textSecondary">
-          {insights.captureStreak}-day capture streak · {badges} badges
+          {t('{n}-day capture streak', { n: insights.captureStreak })} · {t.n(badges, '{n} badge', '{n} badges')}
         </ThemedText>
       </View>
 
       <View style={styles.buttons}>
-        <ProfileButton label="Edit profile" onPress={() => router.push('/edit-profile')} />
-        <ProfileButton label="Insights" onPress={() => router.push('/insights')} />
+        <ProfileButton label={t('Edit profile')} onPress={() => router.push('/edit-profile')} />
+        <ProfileButton label={t('Insights')} onPress={() => router.push('/insights')} />
       </View>
 
       <View style={styles.highlights}>
@@ -73,18 +75,14 @@ export default function ProfileScreen() {
       </View>
 
       <View style={[styles.tabs, { borderColor: theme.backgroundElement }]}>
-        {TABS.map((t) => {
-          const active = t.scope === tab;
+        {TABS.map((option) => {
+          const active = option.scope === tab;
           return (
             <Pressable
-              key={t.scope}
-              onPress={() => {
-                if (t.scope === 'saved') router.push('/vault');
-                else setTab(t.scope);
-              }}
-              accessibilityLabel={t.scope === 'saved' ? 'Vault' : undefined}
+              key={option.scope}
+              onPress={() => setTab(option.scope)}
               style={[styles.tab, active && { borderBottomColor: theme.text }]}>
-              <Icon {...t.icon} size={22} color={active ? theme.text : theme.textSecondary} />
+              <Icon {...option.icon} size={22} color={active ? theme.text : theme.textSecondary} />
             </Pressable>
           );
         })}
@@ -98,20 +96,20 @@ export default function ProfileScreen() {
         <AppBar
           title={profile.username ? `@${profile.username}` : profile.name}
           actions={
-            <IconButton label="Settings" onPress={() => router.push('/settings')}>
+            <IconButton label={t('Settings')} onPress={() => router.push('/settings')}>
               <Icon ios="gearshape" android="settings" />
             </IconButton>
           }
         />
         <MediaGrid
-          items={scopeItems(tab, library.items, data)}
+          items={scoped(tab)}
           scope={tab}
           likes={data.likes}
           edits={data.edits}
           header={header}
           empty={
             <ThemedText themeColor="textSecondary" style={styles.empty}>
-              {TABS.find((t) => t.scope === tab)?.empty}
+              {t(TABS.find((option) => option.scope === tab)?.empty ?? 'No photos yet.')}
             </ThemedText>
           }
         />

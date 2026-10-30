@@ -28,17 +28,18 @@ Known pre-existing lint error: `react-hooks/set-state-in-effect` in `src/hooks/u
 - **React Compiler is on** (`experiments.reactCompiler`). Don't hand-write `useMemo`/`useCallback`. Mutate Reanimated shared values with `.set()`/`.get()`, not `.value`, or the compiler lint rule fails. `React.memo` is fine and used for list cells.
 - **Typed routes** (`experiments.typedRoutes`): `href`s are type-checked against generated `.expo/types`. A new route only type-checks after the dev server has regenerated them.
 - **Must keep working in Expo Go.** Things Expo Go can't do are feature-detected, not assumed:
-  - Android media-library access: the app falls back to demo media.
+  - Android media-library access: the library shows sample content and the Home banner explains why.
   - `expo-notifications`: loaded lazily, and only if `ExpoTopicSubscriptionModule` exists.
   - Face ID: Android fingerprint works.
+- **Auto-rotate** (`orientation: "default"`) follows the phone's rotation lock. Size layouts from `useAppWidth()` on every render (never once at mount); full-screen pagers (viewer, stories) scroll back to their index when the page size changes.
 - **Web is a client-only SPA** (`web.output: "single"`). Don't switch to `"server"`: the UI depends on window size, `localStorage` and `Date.now()`, so SSR causes hydration errors.
 - **Web renders inside a phone frame** (`components/app-frame.web.tsx`). Size layouts with `useAppWidth()` (it subtracts the bezel), never `useWindowDimensions`. Web sheets portal into the frame's `overlay-host` view (`sheet.web.tsx`).
-- Platform splits use `.web.ts(x)` files, e.g. `storage`, `share`, `local-files`, `device-files`, `biometrics`, `export`, `external-player`, `pdf-view`, `sheet`. Keep the exports of each pair identical.
+- Platform splits use `.web.ts(x)` files, e.g. `storage`, `share`, `local-files`, `device-files`, `biometrics`, `export`, `sheet`. Keep the exports of each pair identical.
 - No button sounds or haptics: they were removed on request, so don't reintroduce a feedback module.
 
 ## Architecture
 
-"Gallery" is a private, fully offline gallery: nothing is uploaded. It has an Instagram-style, Material 3 UI, with a feed, music player, videos, profile, side panel, photo editor, vault, notes, a PDF reader and insights/challenges.
+"Gallery" is a private, fully offline gallery: nothing is uploaded. It has an Instagram-style, Material 3 UI, with a feed, music player, videos, profile, side panel, photo editor, vault, notes and insights/challenges.
 
 ### Shell and navigation
 
@@ -55,7 +56,7 @@ Known pre-existing lint error: `react-hooks/set-state-in-effect` in `src/hooks/u
 ### State and derived data
 
 - State lives in small external stores built on `lib/create-store.ts` (`useSyncExternalStore`), with no context providers.
-  - `lib/media.ts` (`library`) holds media items from the SDK 58 `Query().exeForMetadata()` API. Ids are `ph://` (iOS) or `content://` (Android) and are rendered directly by `expo-image`. iOS videos must go through `resolvePlayableUri()`. Without device access, `demoLibrary()` builds picsum/sample-video items with dates relative to now.
+  - `lib/media.ts` (`library`) holds media items from the SDK 58 `Query().exeForMetadata()` API. Ids are `ph://` (iOS) or `content://` (Android) and are rendered directly by `expo-image`. iOS videos must go through `resolvePlayableUri()`. Without device access the library shows sample content instead (`source: 'demo'`, `lib/demo.ts`): picsum.photos photos, public test clips and SoundHelix songs, so it needs network access. `useAppBootstrap` seeds matching notes, stories, folders, likes and songs once (`seedDemoContent`, `demoSeeded`) and removes all of it, including what the user did with it, once the real library loads (`clearDemoContent`). Sample ids start with `demo:` (media) or `demo-` (user data); keep that prefix for anything new. The first load fetches the newest 120 items (`partial: true`) so the feed appears at once, then the full library.
   - `lib/user-data.ts` (`userData`) holds everything the user creates, as one JSON blob in `lib/storage.ts` (`expo-sqlite/kv-store` on device, `localStorage` on web). All mutations are exported functions in that file. Writes are batched (400 ms) and flushed on background or `pagehide`. `load()` merges defaults, so new fields need a default in `DEFAULT_DATA` (edits go through `normalizeEdit`).
 - `useGallery()` (`hooks/use-gallery.ts`) derives views once per state change and shares them across all callers (single-entry cache):
   - Virtual copies are inserted after their originals.
@@ -79,6 +80,7 @@ Known pre-existing lint error: `react-hooks/set-state-in-effect` in `src/hooks/u
   - After 5 wrong attempts, each further miss locks entry for an escalating, persisted time (`checkVaultPasscode` returns `'ok' | 'wrong' | 'locked'`).
   - Vault items must not leak: use `isVaulted(id)` from `useGallery()` anywhere an item could surface by id (notes, attachments, avatar, editor deep links). `trash` excludes them, and deleting a vault item is permanent.
   - The vault hides photos; it doesn't encrypt them (user data is plain JSON in storage).
+  - The vault is only reached from the side panel: Albums and Profile don't link to it.
   - The unlock state (`lib/vault.ts`) is session-only.
   - `album` and `viewer` redirect to `/vault` for vault scopes while it's locked.
   - Fingerprint unlock and passcode recovery come from `lib/biometrics.ts`.
@@ -90,28 +92,22 @@ Known pre-existing lint error: `react-hooks/set-state-in-effect` in `src/hooks/u
 - **Viewer:**
   - `components/zoomable.tsx` handles pinch and pan; double-tap zooms and a single tap toggles the bars.
   - A downward pan closes the viewer when not zoomed. There's also a slideshow button.
-  - Demo photos have a smaller `previewUri` for the feed, which the viewer also uses as its placeholder.
 - Recently deleted is purged after `TRASH_DAYS` (30) at startup (`purgeExpiredTrash`).
-  - Videos use `settings.videoPlayer`: `builtin`, `minimal`, or `external` (`lib/external-player.ts`).
-- `PostCard` and `MediaTile` are memoized and take id-based handlers. Pass stable functions (state setters), not inline closures.
+  - Videos always use the built-in VLC-style controls in `video-surface.tsx` (no native controls, no other player modes). A tap anywhere on the video toggles them; the tap layer sits above the native `VideoView`, which swallows touches on Android. Videos hide the like/note/save bar. Background play (`settings.videoBackground`) needs the `expo-video` plugin's `supportsBackgroundPlayback`, so only works in a development build.
+  - On web, `play()` does nothing until the `<video>` mounts and browsers may block autoplay, so `video-surface.tsx` starts web players as paused and calls `play()` after mount.
+  - The viewer route exports an `ErrorBoundary`, so a failing photo or video shows "Try again" instead of crashing.
+- **Home feed** is a Pinterest-style masonry: `FlashList` with `masonry` and `numColumns` (2 on phones, more on wide screens), rendering `components/pin-card.tsx`. Home's Grid view is the same masonry (`MediaGrid masonry`) at the grid's own column count, still pinchable. FlashList recycles cells, so cards keep no per-item state and images pass `recyclingKey`.
+- `PinCard` and `MediaTile` are memoized and take id-based handlers. Pass stable functions (state setters), not inline closures.
+- **Full-screen pagers** (viewer, stories) track the current page with `onViewableItemsChanged`, created once via `useState` (FlatList throws if it changes). Don't use `onMomentumScrollEnd`: web wheel/trackpad scrolling and slow native drags never fire it.
 
 ### Other features
 
 - **Stories** are user-curated (`stories`: a title plus ordered `itemIds`), not generated from dates. `lib/reels.ts` resolves them, `components/stories-row.tsx` (Profile) plays or edits them, `app/stories.tsx` plays them and `app/story.tsx` edits them. The Videos tab is a grid of every video, not stories.
-- **Music** (`(tabs)/music.tsx`) uses one global expo-audio player in `lib/music.ts`, so playback continues across screens. It registers lock-screen/notification controls (`setActiveForLockScreen`, which Android needs for background play). There's no next/previous there, because single players don't emit those events. `components/mini-player.tsx` shows the now-playing bar above the tab bar. Tracks are imported songs, files found on the device and streamed samples. `components/vinyl.tsx` draws the spinning record.
-- **PDF reader:** `app/pdfs.tsx` and `app/pdf.tsx`. `components/pdf-view(.web).tsx` hosts `lib/pdf-annotator-html.ts`, a pdf.js page loaded from cdnjs, so opening a PDF needs network access.
-  - It runs in a WebView on device and an iframe on web, and talks to the app via postMessage.
-  - Strokes are stored by `lib/pdf-annotations.ts` and the last page read in `PdfDoc.lastPage`.
-  - The page is a template string, so keep inline SVG attributes single-quoted: escaped quotes break it.
-  - **Security:**
-    - pdf.js 3.11.174 is affected by CVE-2024-4367, so keep `isEvalSupported: false`.
-    - Both CDN scripts are pinned with SRI: `pdf.min.js` by its tag, the worker by a `fetch` with `integrity` run from a blob URL. Update both hashes if you change the version (cdnjs publishes them). A meta CSP limits the page to cdnjs.
-    - The device WebView blocks navigation.
-    - The web iframe is sandboxed (`allow-scripts allow-modals`), so it can't reach app storage. Its `contentDocument` is therefore null.
+- **Music** (`(tabs)/music.tsx`) uses one global expo-audio player in `lib/music.ts`, so playback continues across screens. It registers lock-screen/notification controls (`setActiveForLockScreen`, which Android needs for background play). There's no next/previous there, because single players don't emit those events. `components/mini-player.tsx` shows the now-playing bar above the tab bar. Tracks are imported songs and files found on the device (no built-in samples). `components/vinyl.tsx` draws the spinning record. The big record is also the volume knob: drag up/right for louder, down/left for quieter.
 - **Notes** (`app/notes.tsx`, `app/note.tsx`) merge freestanding `journal` notes with per-photo `notes` (`lib/notes.ts`). Lines starting with ☐/☑ are checklist items, • bullets and # headings.
 - **Themes:**
-  - `settings.appearance` is `system`, `light`, `dark`, `brutal`, `gothic` (Blood Moon), `pop` (Pop Art), `win98` (Windows 98) or `contrast` (High Contrast).
-  - Adding a theme takes a `Colors` entry, `ThemeStyles` tokens (`brutal`, `dark`, `outline`, `shadow`, `serif`, `accent`, `desk`, `retro`; `retro` gives Tahoma type, square raised surfaces and a taskbar-style tab bar) and an `Appearances` swatch, all in `constants/theme.ts`.
+  - `settings.appearance` is `system`, `light`, `dark`, `brutal`, `pop` (Pop Art) or `pirate` (Pirate). A saved appearance that no longer exists falls back to `system` (`use-theme.ts`).
+  - Adding a theme takes a `Colors` entry, `ThemeStyles` tokens (`brutal`, `dark`, `outline`, `shadow`, `serif`, `accent`, `desk`) and an `Appearances` swatch, all in `constants/theme.ts`.
   - Read colors via `useTheme()`/`useAccent()`, never `useColorScheme()`.
   - `ThemedView type="backgroundElement"` gets outlines automatically.
   - Themes change only through the press-and-hold wheel in the side panel (`components/theme-wheel.tsx`).
@@ -119,10 +115,11 @@ Known pre-existing lint error: `react-hooks/set-state-in-effect` in `src/hooks/u
 
 ### Files and platform pitfalls
 
-- **Imported files** (PDFs, songs) go through `lib/local-files.ts`.
+- **Imported files** (songs) go through `lib/local-files.ts`.
   - **On device:** files are copied into `Paths.document/<kind>` and stored as `doc:<kind>/<file>`. Never store absolute paths, because Expo Go's documents folder can move between sessions.
   - **On web:** the bytes go into IndexedDB and are stored as `idb:<id>`.
   - **Copying:** `File.copy()` is **async** (`copySync` is the sync one). Imports use the legacy `copyAsync` first, because the new API can't read picker files in Expo Go on Android.
-- **Device scanning** (`lib/device-files.ts`) covers Android media-library audio (development builds only) and folders the user picks once (`settings.musicFolder` / `pdfFolder`). Found files are read in place, and `deleteStored` never deletes them.
+- **Device scanning** (`lib/device-files.ts`) covers Android media-library audio (development builds only) and folders the user picks once (`settings.musicFolder`). Found files are read in place, and `deleteStored` never deletes them.
 - **react-native-web `onLayout`** only attaches when a view mounts. If a view gains `onLayout` on a later render (for example after an early return), it never fires: keep it on every branch, or remount with a `key`. Horizontal `FlatList` pages also need an explicit height on web.
 - **`FlatList` with `numColumns`:** `initialNumToRender` and `maxToRenderPerBatch` count *rows*, not items. A tile count there loads the whole library at once.
+- **Never `Image.prefetch` device photos:** it decodes them at full resolution (a 12 MP photo is ~48 MB in memory), which crashed the app. Rendered images are downscaled to their view instead.

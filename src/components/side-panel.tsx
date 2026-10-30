@@ -12,10 +12,12 @@ import { ThemedView } from '@/components/themed-view';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useAccent, type useGallery } from '@/hooks/use-gallery';
 import { useTheme } from '@/hooks/use-theme';
+import { dirProps, dirStyle } from '@/lib/direction';
+import { useLanguage, useT, type TKey } from '@/lib/i18n';
 import { closeSidePanel } from '@/lib/ui';
 
 type Entry = {
-  label: string;
+  label: TKey;
   href: Href;
   icon: { ios: SFSymbol; android: AndroidSymbol };
   count?: number;
@@ -37,6 +39,11 @@ export function SidePanel({
   const { data, challenges, reels, itemCount } = gallery;
   const accent = useAccent();
   const theme = useTheme();
+  const t = useT();
+  // The drawer opens from the reading side: the right edge in Arabic. It's placed by the
+  // language rather than the layout direction, which on a phone only flips after a restart.
+  const rtl = useLanguage() === 'ar';
+  const side = rtl ? 1 : -1;
   const root = useRef<ComponentRef<typeof View>>(null);
   const wheel = useThemeWheel(root);
   const insets = useSafeAreaInsets();
@@ -48,13 +55,13 @@ export function SidePanel({
   }, [open, progress]);
 
   const panelStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: (progress.get() - 1) * (PANEL_WIDTH + 24) }],
+    transform: [{ translateX: (1 - progress.get()) * side * (PANEL_WIDTH + 24) }],
   }));
   const scrimStyle = useAnimatedStyle(() => ({ opacity: progress.get() * 0.5 }));
 
   const activeChallenges = challenges.filter((c) => c.state === 'active').length;
 
-  const sections: { title: string; entries: Entry[] }[] = [
+  const sections: { title: TKey; entries: Entry[] }[] = [
     {
       title: 'Your activity',
       entries: [
@@ -100,12 +107,6 @@ export function SidePanel({
           count: activeChallenges || undefined,
         },
         {
-          label: 'PDF reader',
-          href: '/pdfs',
-          icon: { ios: 'book', android: 'menu_book' },
-          count: data.pdfs.length || undefined,
-        },
-        {
           label: 'Albums',
           href: '/albums',
           icon: { ios: 'rectangle.stack', android: 'photo_library' },
@@ -139,28 +140,33 @@ export function SidePanel({
   return (
     <View
       ref={root}
-      style={StyleSheet.absoluteFill}
+      // Physical left/right here, so `right: 0` means the right edge in every layout direction.
+      {...dirProps('ltr')}
+      style={[StyleSheet.absoluteFill, dirStyle('ltr')]}
       pointerEvents={open ? 'box-none' : 'none'}
       aria-hidden={!open}>
       <Animated.View style={[StyleSheet.absoluteFill, styles.scrim, scrimStyle]}>
         <Pressable
           style={StyleSheet.absoluteFill}
           onPress={closeSidePanel}
-          accessibilityLabel="Close menu"
+          accessibilityLabel={t('Close menu')}
         />
       </Animated.View>
-      <Animated.View style={[styles.panel, panelStyle]}>
+      <Animated.View style={[styles.panel, rtl ? styles.panelRight : styles.panelLeft, panelStyle]}>
         <ThemedView
+          {...dirProps(rtl ? 'rtl' : 'ltr')}
           style={[
             styles.panelInner,
+            // The drawer's own contents read in the app's direction again.
+            dirStyle(rtl ? 'rtl' : 'ltr'),
             { paddingTop: insets.top + Spacing.three },
-            theme.brutal && { borderRightWidth: 3, borderColor: theme.border, borderRadius: 0 },
+            theme.brutal && { borderEndWidth: 3, borderColor: theme.border, borderRadius: 0 },
           ]}>
           <View style={styles.header}>
             <View style={styles.headerText}>
-              <ThemedText style={[styles.brand, theme.serif && styles.brandGothic]}>Gallery</ThemedText>
+              <ThemedText style={[styles.brand, theme.serif && styles.brandSerif]}>{t('Gally-ri')}</ThemedText>
               <ThemedText type="small" themeColor="textSecondary">
-                {itemCount} items · {wheel.label} theme
+                {t.n(itemCount, '{n} item', '{n} items')} · {t('{name} theme', { name: wheel.label })}
               </ThemedText>
             </View>
             {wheel.trigger}
@@ -173,7 +179,7 @@ export function SidePanel({
             {sections.map((section) => (
               <View key={section.title} style={styles.section}>
                 <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionTitle}>
-                  {section.title}
+                  {t(section.title)}
                 </ThemedText>
                 {section.entries.map((entry) => (
                   <Pressable
@@ -184,7 +190,7 @@ export function SidePanel({
                       pressed && { backgroundColor: theme.backgroundElement },
                     ]}>
                     <Icon {...entry.icon} />
-                    <ThemedText style={styles.entryLabel}>{entry.label}</ThemedText>
+                    <ThemedText style={styles.entryLabel}>{t(entry.label)}</ThemedText>
                     {entry.count ? (
                       <View style={[styles.count, { backgroundColor: accent }]}>
                         <ThemedText style={styles.countText}>{entry.count}</ThemedText>
@@ -199,7 +205,7 @@ export function SidePanel({
           <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.three }]}>
             <Icon ios="lock.fill" android="lock" size={14} color={theme.textSecondary} />
             <ThemedText type="small" themeColor="textSecondary">
-              Everything stays on this device
+              {t('Everything stays on this device')}
             </ThemedText>
           </View>
         </ThemedView>
@@ -210,6 +216,12 @@ export function SidePanel({
 }
 
 const styles = StyleSheet.create({
+  panelLeft: {
+    left: 0,
+  },
+  panelRight: {
+    right: 0,
+  },
   scrollView: {
     flex: 1,
   },
@@ -224,14 +236,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     bottom: 0,
-    left: 0,
     width: PANEL_WIDTH,
     maxWidth: '85%',
   },
   panelInner: {
     flex: 1,
-    borderTopRightRadius: Spacing.four,
-    borderBottomRightRadius: Spacing.four,
+    borderTopEndRadius: Spacing.four,
+    borderBottomEndRadius: Spacing.four,
     paddingHorizontal: Spacing.two,
     gap: Spacing.three,
   },
@@ -253,7 +264,7 @@ const styles = StyleSheet.create({
     lineHeight: 36,
     fontWeight: 700,
   },
-  brandGothic: {
+  brandSerif: {
     fontStyle: 'normal',
     textTransform: 'uppercase',
     letterSpacing: 3,

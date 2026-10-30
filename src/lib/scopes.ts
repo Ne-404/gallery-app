@@ -1,5 +1,6 @@
 import type { AndroidSymbol, SFSymbol } from 'expo-symbols';
 
+import type { TKey, Translator } from '@/lib/i18n';
 import type { MediaItem, MediaKind } from '@/lib/media';
 import type { UserData } from '@/lib/user-data';
 
@@ -61,7 +62,7 @@ export type Album = {
   icon: { ios: SFSymbol; android: AndroidSymbol };
 };
 
-const SMART_ALBUMS: Omit<Album, 'items'>[] = [
+const SMART_ALBUMS: (Omit<Album, 'items' | 'title'> & { title: TKey })[] = [
   { scope: 'liked', title: 'Favorites', icon: { ios: 'heart.fill', android: 'favorite' } },
   { scope: 'video', title: 'Videos', icon: { ios: 'video.fill', android: 'videocam' } },
   { scope: 'live', title: 'Live Photos', icon: { ios: 'livephoto', android: 'motion_photos_on' } },
@@ -71,7 +72,7 @@ const SMART_ALBUMS: Omit<Album, 'items'>[] = [
   { scope: 'notes', title: 'Journal', icon: { ios: 'text.bubble.fill', android: 'chat_bubble' } },
 ];
 
-export function buildAlbums(items: MediaItem[], data: UserData) {
+export function buildAlbums(items: MediaItem[], data: UserData, t: Translator) {
   const yearAlbums = [...new Set(items.map((i) => new Date(i.createdAt).getFullYear()))]
     .sort((a, b) => b - a)
     .map(
@@ -100,23 +101,24 @@ export function buildAlbums(items: MediaItem[], data: UserData) {
         icon: { ios: 'rectangle.stack.fill', android: 'photo_library' },
       })
     ),
-    smart: SMART_ALBUMS.map((a) => ({ ...a, items: scopeItems(a.scope, items, data) })).filter(
+    smart: SMART_ALBUMS.map((a) => ({ ...a, title: t(a.title), items: scopeItems(a.scope, items, data) })).filter(
       (a) => a.items.length > 0 || a.scope === 'liked'
     ),
     years: yearAlbums,
   };
 }
 
-export function scopeTitle(scope: Scope, data: UserData) {
+export function scopeTitle(scope: Scope, data: UserData, t: Translator) {
   if (scope.startsWith('year:')) return scope.slice(5);
   if (scope.startsWith('collection:')) {
-    return data.collections.find((c) => `collection:${c.id}` === scope)?.name ?? 'Album';
+    return data.collections.find((c) => `collection:${c.id}` === scope)?.name ?? t('Album');
   }
   if (scope.startsWith('folder:')) {
-    return data.folders.find((f) => `folder:${f.id}` === scope)?.name ?? 'Folder';
+    return data.folders.find((f) => `folder:${f.id}` === scope)?.name ?? t('Folder');
   }
-  if (scope === 'saved') return 'Saved';
-  if (scope === 'trash') return 'Recently deleted';
-  if (scope === 'all') return 'All photos';
-  return SMART_ALBUMS.find((a) => a.scope === scope)?.title ?? 'Photos';
+  if (scope === 'saved') return t('Saved');
+  if (scope === 'trash') return t('Recently deleted');
+  if (scope === 'all') return t('All photos');
+  const smart = SMART_ALBUMS.find((a) => a.scope === scope);
+  return smart ? t(smart.title) : t('Photos');
 }

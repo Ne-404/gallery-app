@@ -4,7 +4,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { MaxFeedWidth, Spacing } from '@/constants/theme';
+import { useT } from '@/lib/i18n';
 
 type SheetProps = {
   visible: boolean;
@@ -16,12 +17,13 @@ type SheetProps = {
 /** Bottom sheet used for notes, collection picking and naming. */
 export function Sheet({ visible, title, onClose, children }: SheetProps) {
   const insets = useSafeAreaInsets();
+  const t = useT();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={styles.backdrop}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel={t('Close')} />
         <ThemedView style={[styles.sheet, { paddingBottom: insets.bottom + Spacing.three }]}>
           <ThemedView type="backgroundSelected" style={styles.handle} />
           <ThemedText type="smallBold" style={styles.title}>
@@ -48,7 +50,7 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
     maxHeight: '75%',
     width: '100%',
-    maxWidth: MaxContentWidth,
+    maxWidth: MaxFeedWidth,
     alignSelf: 'center',
   },
   handle: {

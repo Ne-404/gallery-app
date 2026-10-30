@@ -11,8 +11,7 @@ import {
 import { Platform } from 'react-native';
 
 import { createStore } from '@/lib/create-store';
-import { DAY_MS } from '@/lib/dates';
-import { updateSettings, userData, type LibrarySource } from '@/lib/user-data';
+import { DEMO_ITEMS } from '@/lib/demo';
 
 /**
  * `single` is a normal photo; everything else is "volume" content (motion or multi-shot)
@@ -22,11 +21,9 @@ export type MediaKind = 'single' | 'burst' | 'live' | 'video' | 'screenshot';
 
 export type MediaItem = {
   id: string;
-  /** Renderable by expo-image (`ph://` on iOS, `content://` on Android, https for demo). */
+  /** Renderable by expo-image (`ph://` on iOS, `content://` on Android). */
   uri: string;
   thumbUri: string;
-  /** Medium-size image for the feed (falls back to `uri`); demo photos are served smaller. */
-  previewUri?: string;
   type: 'photo' | 'video';
   kind: MediaKind;
   /** Milliseconds since epoch. */
@@ -41,8 +38,16 @@ export type MediaItem = {
 
 export type PermissionState = 'granted' | 'limited' | 'denied' | 'undetermined' | 'unavailable';
 
+/**
+ * `demo` means the camera roll isn't connected (web, Expo Go on Android, or no permission),
+ * so sample photos show instead; `none` is only the state before the first load.
+ */
+export type LibrarySource = 'device' | 'demo' | 'none';
+
 export type LibraryState = {
   status: 'loading' | 'ready';
+  /** Only the newest items are in so far; the rest of the library is still loading. */
+  partial?: boolean;
   source: LibrarySource;
   permission: PermissionState;
   items: MediaItem[];
@@ -50,7 +55,7 @@ export type LibraryState = {
 
 export const library = createStore<LibraryState>({
   status: 'loading',
-  source: 'demo',
+  source: 'none',
   permission: 'undetermined',
   items: [],
 });
@@ -58,21 +63,31 @@ export const library = createStore<LibraryState>({
 export const useLibrary = library.use;
 
 const MAX_ASSETS = 5000;
+/** Loaded first, so the feed shows up right away while the rest of the library loads. */
+const FIRST_PAGE = 120;
 const BURST_GAP_MS = 1500;
+
+const queryAssets = (limit: number) =>
+  new Query()
+    .within(AssetField.MEDIA_TYPE, [MediaType.IMAGE, MediaType.VIDEO])
+    .orderBy({ key: AssetField.CREATION_TIME, ascending: false })
+    .limit(limit)
+    .exeForMetadata();
 
 export async function loadLibrary() {
   library.set((s) => ({ ...s, status: 'loading' }));
 
   const permission = await readPermission();
-  const wantsDevice = userData.get().settings.source === 'device';
-
-  if (wantsDevice && (permission === 'granted' || permission === 'limited')) {
+  if ((permission === 'granted' || permission === 'limited')) {
     try {
-      const metadata = await new Query()
-        .within(AssetField.MEDIA_TYPE, [MediaType.IMAGE, MediaType.VIDEO])
-        .orderBy({ key: AssetField.CREATION_TIME, ascending: false })
-        .limit(MAX_ASSETS)
-        .exeForMetadata();
+      // A refresh already has items on screen, so it goes straight to the full load.
+      if (library.get().items.length === 0) {
+        const first = await queryAssets(FIRST_PAGE);
+        const partial = first.length === FIRST_PAGE;
+        library.set({ status: 'ready', source: 'device', permission, partial, items: markBursts(first.map(fromMetadata)) });
+        if (!partial) return;
+      }
+      const metadata = await queryAssets(MAX_ASSETS);
       library.set({
         status: 'ready',
         source: 'device',
@@ -81,26 +96,20 @@ export async function loadLibrary() {
       });
       return;
     } catch (error) {
-      console.warn('Could not read the media library, falling back to demo media.', error);
+      console.warn('Could not read the media library.', error);
     }
   }
 
-  library.set({ status: 'ready', source: 'demo', permission, items: markBursts(demoLibrary()) });
+  library.set({ status: 'ready', source: 'demo', permission, items: markBursts(DEMO_ITEMS) });
 }
 
-/** Asks for photo library access and switches to device media if granted. */
+/** Asks for photo library access and loads the camera roll if granted. */
 export async function requestLibraryAccess() {
   try {
     await requestPermissionsAsync(false, ['photo', 'video']);
   } catch (error) {
     console.warn('Media library permission request failed.', error);
   }
-  updateSettings({ source: 'device' });
-  await loadLibrary();
-}
-
-export async function switchToDemoLibrary() {
-  updateSettings({ source: 'demo' });
   await loadLibrary();
 }
 
@@ -168,102 +177,9 @@ function markBursts(items: MediaItem[]) {
   return result;
 }
 
-// ---------------------------------------------------------------------------
-// Demo media, used when the device library isn't available (web, Expo Go on
-// Android, or permission denied). Dates are generated relative to today so
-// "On This Day" memories and weekly insights always have something to show.
-// ---------------------------------------------------------------------------
-
-const DEMO_VIDEOS = [
-  { url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4', poster: 152, duration: 5 },
-  { url: 'https://test-videos.co.uk/vids/jellyfish/mp4/h264/360/Jellyfish_360_10s_1MB.mp4', poster: 1053, duration: 10 },
-  { url: 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4', poster: 1043, duration: 10 },
-  { url: 'https://test-videos.co.uk/vids/sintel/mp4/h264/360/Sintel_360_10s_1MB.mp4', poster: 1036, duration: 10 },
-  { url: 'https://download.samplelib.com/mp4/sample-10s.mp4', poster: 1039, duration: 10 },
-];
-
-function demoLibrary(): MediaItem[] {
-  const now = Date.now();
-  let seed = 42;
-  const random = () => {
-    seed = (seed * 16807) % 2147483647;
-    return seed / 2147483647;
-  };
-
-  const yearsAgo = (years: number, dayJitter: number) => {
-    const d = new Date(now);
-    d.setFullYear(d.getFullYear() - years);
-    return d.getTime() + dayJitter * DAY_MS;
-  };
-
-  const dates: number[] = [];
-  // Recent activity, weighted toward weekends.
-  for (let i = 0; i < 34; i++) {
-    let t = now - random() * 28 * DAY_MS;
-    const day = new Date(t).getDay();
-    if (day !== 0 && day !== 6 && random() < 0.5) t -= ((day + 1) % 7) * DAY_MS;
-    dates.push(Math.min(t, now - 60_000));
-  }
-  // This week in previous years.
-  for (const years of [1, 2, 3]) {
-    for (let i = 0; i < 6; i++) dates.push(yearsAgo(years, (random() - 0.5) * 5));
-  }
-  // Everything else spread over three years.
-  while (dates.length < 92) dates.push(now - (30 + random() * 1060) * DAY_MS);
-
-  const photos: MediaItem[] = dates.map((createdAt, i) => {
-    const id = i < 86 ? i : 1020 + (i - 86);
-    return {
-      id: `demo-photo-${id}`,
-      uri: `https://picsum.photos/id/${id}/1080/1440`,
-      thumbUri: `https://picsum.photos/id/${id}/360/360`,
-      previewUri: `https://picsum.photos/id/${id}/720/960`,
-      type: 'photo',
-      kind: i % 13 === 5 ? 'live' : 'single',
-      createdAt,
-      duration: null,
-      width: 1080,
-      height: 1440,
-    };
-  });
-
-  // A burst: four frames a fraction of a second apart.
-  const burstStart = now - 3 * DAY_MS;
-  for (let i = 0; i < 4; i++) {
-    const id = 1010 + i;
-    photos.push({
-      id: `demo-burst-${i}`,
-      uri: `https://picsum.photos/id/${id}/1080/1440`,
-      thumbUri: `https://picsum.photos/id/${id}/360/360`,
-      previewUri: `https://picsum.photos/id/${id}/720/960`,
-      type: 'photo',
-      kind: 'single',
-      createdAt: burstStart + i * 400,
-      duration: null,
-      width: 1080,
-      height: 1440,
-    });
-  }
-
-  const videoDates = [now - 2 * DAY_MS, now - 9 * DAY_MS, yearsAgo(1, 1), yearsAgo(2, -1), now - 200 * DAY_MS];
-  const videos: MediaItem[] = DEMO_VIDEOS.map((video, i) => ({
-    id: `demo-video-${i}`,
-    uri: video.url,
-    thumbUri: `https://picsum.photos/id/${video.poster}/360/360`,
-    type: 'video',
-    kind: 'video',
-    createdAt: videoDates[i],
-    duration: video.duration,
-    width: 1280,
-    height: 720,
-  }));
-
-  return [...photos, ...videos].sort((a, b) => b.createdAt - a.createdAt);
-}
-
 /**
  * Deletes device photos for good (the system asks the user to confirm). Returns false when
- * that isn't possible, e.g. demo media or no permission; callers then just hide the items.
+ * that isn't possible, e.g. no permission; callers then just hide the items.
  */
 export async function deleteFromDevice(itemIds: string[]) {
   if (library.get().source !== 'device' || Platform.OS === 'web') return false;

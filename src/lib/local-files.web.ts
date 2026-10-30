@@ -2,16 +2,14 @@ import * as DocumentPicker from 'expo-document-picker';
 
 import type { FileKind, StoredFile } from '@/lib/local-files';
 
-export const MAX_READER_BYTES = 60 * 1024 * 1024;
-export const TOO_LARGE = 'too-large';
-
 /**
  * Browser storage for imported files. They're too big for localStorage, so the bytes live
  * in IndexedDB and the stored `uri` is `idb:<id>`.
  */
+// Named for the removed PDF reader; kept so imported songs aren't lost.
 const DB_NAME = 'gallery-pdfs';
 const STORE = 'files';
-const TYPES: Record<FileKind, string> = { pdf: 'application/pdf', audio: 'audio/*' };
+const TYPES: Record<FileKind, string> = { audio: 'audio/*' };
 
 function open(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -46,21 +44,11 @@ export async function pickAndStore(kind: FileKind): Promise<StoredFile[]> {
   return stored;
 }
 
-/** An object URL for the stored file, or the URI itself for remote (sample) files. */
+/** An object URL for the stored file, or the URI itself for anything else. */
 export async function storedUrl(uri: string) {
   if (!uri.startsWith('idb:')) return uri;
   const blob = await run<Blob | undefined>('readonly', (store) => store.get(keyOf(uri)));
   return blob ? URL.createObjectURL(blob) : null;
-}
-
-export async function storedBase64(uri: string): Promise<string | null> {
-  const blob = await run<Blob | undefined>('readonly', (store) => store.get(keyOf(uri)));
-  if (!blob) return null;
-  if (blob.size > MAX_READER_BYTES) return TOO_LARGE;
-  const bytes = new Uint8Array(await blob.arrayBuffer());
-  let binary = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(binary);
 }
 
 export function deleteStored(uri: string) {

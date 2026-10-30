@@ -9,9 +9,11 @@ import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { useAppWidth } from '@/hooks/use-app-width';
 import { useAccent, useGallery } from '@/hooks/use-gallery';
 import { useTheme } from '@/hooks/use-theme';
 import { timeAgo } from '@/lib/dates';
+import { useT } from '@/lib/i18n';
 import { NOTE_COLORS, noteEntries, parseLines, type NoteEntry } from '@/lib/notes';
 
 /** Notes app: freestanding notes and photo notes together, searchable, pinned first. */
@@ -19,9 +21,12 @@ export default function NotesScreen() {
   const { data, itemsById, isVaulted } = useGallery();
   const accent = useAccent();
   const theme = useTheme();
+  const t = useT();
+  // Two columns on a phone, more on tablets.
+  const columns = Math.max(2, Math.floor(useAppWidth() / 240));
   const [query, setQuery] = useState('');
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-  const entries = noteEntries(data, isVaulted).filter((e) => {
+  const entries = noteEntries(data, isVaulted, t).filter((e) => {
     const text = `${e.title}\n${e.body}`.toLowerCase();
     return words.every((w) => text.includes(w));
   });
@@ -35,11 +40,12 @@ export default function NotesScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-        <AppBar title="Notes" leading="back" />
+        <AppBar title={t('Notes')} leading="back" />
         <FlatList
           data={entries}
           keyExtractor={(e) => e.id}
-          numColumns={2}
+          key={columns}
+          numColumns={columns}
           columnWrapperStyle={styles.columns}
           contentContainerStyle={styles.list}
           keyboardShouldPersistTaps="handled"
@@ -49,9 +55,9 @@ export default function NotesScreen() {
               <TextInput
                 value={query}
                 onChangeText={setQuery}
-                placeholder={`Search ${entries.length} ${entries.length === 1 ? "note" : "notes"}`}
+                placeholder={t.n(entries.length, 'Search {n} note', 'Search {n} notes')}
                 placeholderTextColor={theme.textSecondary}
-                accessibilityLabel="Search notes"
+                accessibilityLabel={t('Search notes')}
                 style={[styles.searchInput, { color: theme.text }, noFocusRing]}
               />
             </ThemedView>
@@ -60,7 +66,7 @@ export default function NotesScreen() {
             <View style={styles.empty}>
               <Icon ios="note.text" android="sticky_note_2" size={44} color={theme.textSecondary} />
               <ThemedText themeColor="textSecondary" style={styles.center}>
-                {query ? 'No notes match.' : 'No notes yet. Tap the pencil to write one, or add a note to any photo.'}
+                {query ? t('No notes match.') : t('No notes yet. Tap the pencil to write one, or add a note to any photo.')}
               </ThemedText>
             </View>
           }
@@ -70,7 +76,7 @@ export default function NotesScreen() {
             const photo = photoId && !isVaulted(photoId) ? itemsById.get(photoId) : undefined;
             const lines = parseLines(entry.body).filter((l) => l.text.trim()).slice(0, 5);
             return (
-              <Pressable onPress={() => open(entry)} style={({ pressed }) => [styles.cell, pressed && styles.pressed]}>
+              <Pressable onPress={() => open(entry)} style={({ pressed }) => [styles.cell, { maxWidth: `${100 / columns}%` }, pressed && styles.pressed]}>
                 <ThemedView
                   type="backgroundElement"
                   style={[styles.card, tint && { backgroundColor: `${tint}${theme.dark ? '33' : '2E'}`, borderColor: `${tint}88` }]}>
@@ -95,7 +101,7 @@ export default function NotesScreen() {
                     ))}
                     <ThemedText type="small" themeColor="textSecondary" style={styles.date}>
                       {entry.kind === 'photo' ? '📷 ' : ''}
-                      {timeAgo(entry.updatedAt)}
+                      {timeAgo(entry.updatedAt, t)}
                     </ThemedText>
                   </View>
                 </ThemedView>
@@ -107,7 +113,7 @@ export default function NotesScreen() {
           onPress={() => {
             router.push('/note');
           }}
-          accessibilityLabel="New note"
+          accessibilityLabel={t('New note')}
           style={({ pressed }) => [styles.fab, { backgroundColor: accent }, pressed && styles.pressed]}>
           <Icon ios="square.and.pencil" android="edit_square" size={26} color="#fff" />
         </Pressable>
@@ -149,7 +155,6 @@ const styles = StyleSheet.create({
   },
   cell: {
     flex: 1,
-    maxWidth: '50%',
   },
   card: {
     borderRadius: Spacing.three,
@@ -189,7 +194,7 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    right: Spacing.four,
+    end: Spacing.four,
     bottom: Spacing.five,
     width: 60,
     height: 60,

@@ -9,6 +9,7 @@ import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAccent, useGallery } from '@/hooks/use-gallery';
 import { useTheme } from '@/hooks/use-theme';
 import { rewardLabel, type ChallengeStatus } from '@/lib/challenges';
+import { useT, type Translator } from '@/lib/i18n';
 import { computeInsights } from '@/lib/insights';
 import { startChallenge } from '@/lib/user-data';
 
@@ -16,7 +17,8 @@ export default function InsightsScreen() {
   const { library, data, challenges } = useGallery();
   const accent = useAccent();
   const theme = useTheme();
-  const insights = computeInsights(library.items, data.openDays);
+  const t = useT();
+  const insights = computeInsights(library.items, data.openDays, t);
   const maxDay = Math.max(1, ...insights.week.map((d) => d.count));
   const maxHeat = Math.max(1, ...insights.heatmap.map((d) => d.count));
   const completed = challenges.filter((c) => c.state === 'completed');
@@ -24,11 +26,11 @@ export default function InsightsScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-        <AppBar title="Insights & challenges" leading="back" />
+        <AppBar title={t('Insights & challenges')} leading="back" />
         <ScrollView contentContainerStyle={styles.content}>
           <Card>
             <ThemedText type="smallBold" themeColor="textSecondary">
-              THIS WEEK
+              {t('THIS WEEK')}
             </ThemedText>
             <ThemedText style={styles.headline}>{insights.headline}</ThemedText>
             <View style={styles.bars}>
@@ -55,12 +57,12 @@ export default function InsightsScreen() {
 
           <Card>
             <ThemedText type="smallBold" themeColor="textSecondary">
-              CONSISTENCY & MEMORIES
+              {t('CONSISTENCY & MEMORIES')}
             </ThemedText>
             <View style={styles.streaks}>
-              <Stat value={insights.captureStreak} label="day capture streak" style={styles.streak} />
-              <Stat value={insights.openStreak} label="day app streak" style={styles.streak} />
-              <Stat value={insights.activeDays} label="active days (12 wks)" style={styles.streak} />
+              <Stat value={insights.captureStreak} label={t('day capture streak')} style={styles.streak} />
+              <Stat value={insights.openStreak} label={t('day app streak')} style={styles.streak} />
+              <Stat value={insights.activeDays} label={t('active days (12 wks)')} style={styles.streak} />
             </View>
             <View style={styles.heatmap}>
               {Array.from({ length: 12 }, (_, week) => (
@@ -84,34 +86,38 @@ export default function InsightsScreen() {
 
           <Card>
             <ThemedText type="smallBold" themeColor="textSecondary">
-              LIBRARY
+              {t('LIBRARY')}
             </ThemedText>
             <View style={styles.statGrid}>
-              <Stat value={insights.counts.photos} label="photos" />
-              <Stat value={insights.counts.videos} label="videos" />
-              <Stat value={insights.counts.live} label="live photos" />
-              <Stat value={insights.counts.bursts} label="bursts" />
-              <Stat value={insights.counts.screenshots} label="screenshots" />
-              <Stat value={`${insights.cleanliness}%`} label="tidy score" />
+              <Stat value={insights.counts.photos} label={t('photos')} />
+              <Stat value={insights.counts.videos} label={t('videos')} />
+              <Stat value={insights.counts.live} label={t('live photos')} />
+              <Stat value={insights.counts.bursts} label={t('bursts')} />
+              <Stat value={insights.counts.screenshots} label={t('screenshots')} />
+              <Stat value={`${insights.cleanliness}%`} label={t('tidy score')} />
             </View>
             <ThemedText type="small" themeColor="textSecondary">
               {insights.clutter > 0
-                ? `${insights.clutter} screenshots and extra burst frames could be cleaned up.`
-                : 'Your library is spotless. No screenshots or extra burst frames.'}
+                ? t.n(
+                    insights.clutter,
+                    '{n} photo could be cleaned up (screenshots and extra burst frames).',
+                    '{n} photos could be cleaned up (screenshots and extra burst frames).'
+                  )
+                : t('Your library is spotless. No screenshots or extra burst frames.')}
             </ThemedText>
           </Card>
 
           <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionTitle}>
-            CHALLENGES
+            {t('CHALLENGES')}
           </ThemedText>
           {challenges.map((status) => (
-            <ChallengeCard key={status.challenge.id} status={status} accent={accent} />
+            <ChallengeCard key={status.challenge.id} status={status} accent={accent} t={t} />
           ))}
 
           {completed.length > 0 && (
             <>
               <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionTitle}>
-                BADGES
+                {t('BADGES')}
               </ThemedText>
               <View style={styles.badges}>
                 {completed.map(({ challenge }) => (
@@ -120,7 +126,7 @@ export default function InsightsScreen() {
                       <Icon {...challenge.icon} color="#fff" />
                     </View>
                     <ThemedText type="small" numberOfLines={2} style={styles.badgeLabel}>
-                      {challenge.title}
+                      {t(challenge.title)}
                     </ThemedText>
                   </View>
                 ))}
@@ -152,7 +158,7 @@ function Stat({ value, label, style }: { value: number | string; label: string; 
   );
 }
 
-function ChallengeCard({ status, accent }: { status: ChallengeStatus; accent: string }) {
+function ChallengeCard({ status, accent, t }: { status: ChallengeStatus; accent: string; t: Translator }) {
   const theme = useTheme();
   const { challenge, state, progress, daysLeft } = status;
   const canStart = state === 'available' || state === 'expired';
@@ -164,12 +170,12 @@ function ChallengeCard({ status, accent }: { status: ChallengeStatus; accent: st
           <Icon {...challenge.icon} color={state === 'completed' ? '#fff' : theme.text} />
         </View>
         <View style={styles.challengeText}>
-          <ThemedText type="smallBold">{challenge.title}</ThemedText>
+          <ThemedText type="smallBold">{t(challenge.title)}</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            {challenge.description}
+            {t(challenge.description)}
           </ThemedText>
           <ThemedText type="small" style={{ color: accent }}>
-            Reward: {rewardLabel(challenge.reward)}
+            {t('Reward: {reward}', { reward: rewardLabel(challenge.reward, t) })}
           </ThemedText>
         </View>
       </View>
@@ -185,13 +191,13 @@ function ChallengeCard({ status, accent }: { status: ChallengeStatus; accent: st
             />
           </View>
           <ThemedText type="small" themeColor="textSecondary">
-            {progress} / {challenge.goal} · {daysLeft} {daysLeft === 1 ? 'day' : 'days'} left
+            {progress} / {challenge.goal} · {t.n(daysLeft, '{n} day left', '{n} days left')}
           </ThemedText>
         </>
       )}
       {state === 'completed' && (
         <ThemedText type="smallBold" style={{ color: accent }}>
-          Completed ✓
+          {t('Completed ✓')}
         </ThemedText>
       )}
       {canStart && (
@@ -201,7 +207,7 @@ function ChallengeCard({ status, accent }: { status: ChallengeStatus; accent: st
           }}
           style={({ pressed }) => [styles.startButton, { borderColor: accent }, pressed && styles.pressed]}>
           <ThemedText type="smallBold" style={{ color: accent }}>
-            {state === 'expired' ? 'Time’s up. Try again' : `Start · ${challenge.durationDays} days`}
+            {state === 'expired' ? t('Time’s up. Try again') : t('Start · {n} days', { n: challenge.durationDays })}
           </ThemedText>
         </Pressable>
       )}

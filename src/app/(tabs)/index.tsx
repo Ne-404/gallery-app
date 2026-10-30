@@ -1,9 +1,9 @@
+import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { router, useNavigation } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { BlurView } from 'expo-blur';
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
   StyleSheet,
   View,
@@ -14,47 +14,53 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AlbumsOverview } from '@/components/albums-overview';
 import { AppBar, IconButton } from '@/components/app-bar';
-import { CollectionPicker } from '@/components/collection-picker';
 import { Icon } from '@/components/icon';
 import { ItemActions } from '@/components/item-actions';
 import { LibraryBanner } from '@/components/library-banner';
 import { MediaGrid } from '@/components/media-grid';
-import { PostCard } from '@/components/post-card';
+import { PinCard } from '@/components/pin-card';
 import { TextPrompt } from '@/components/text-prompt';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, Spacing } from '@/constants/theme';
+import { BottomTabInset, MaxFeedWidth, Spacing } from '@/constants/theme';
 import { useAppWidth } from '@/hooks/use-app-width';
 import { useAccent, useGallery } from '@/hooks/use-gallery';
 import { useTheme } from '@/hooks/use-theme';
-import { loadLibrary } from '@/lib/media';
-import { scopeItems } from '@/lib/scopes';
+import { useT, type TKey } from '@/lib/i18n';
+import { loadLibrary, type MediaItem } from '@/lib/media';
 import { setNote } from '@/lib/user-data';
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 40;
+/** Space between and around the feed's columns. */
+const FEED_GAP = Spacing.two;
+/** Phones get two columns; wider screens add one per this much width. */
+const MIN_COLUMN_WIDTH = 260;
 const SWITCHER_HEIGHT = 56;
 
 type Layout = 'feed' | 'grid' | 'albums';
 
-const LAYOUTS: { id: Layout; label: string; ios: 'rectangle.grid.1x2' | 'square.grid.3x3' | 'rectangle.stack'; android: 'view_agenda' | 'grid_on' | 'photo_library' }[] = [
-  { id: 'feed', label: 'Feed', ios: 'rectangle.grid.1x2', android: 'view_agenda' },
+const LAYOUTS: { id: Layout; label: TKey; ios: 'square.grid.2x2' | 'square.grid.3x3' | 'rectangle.stack'; android: 'dashboard' | 'grid_on' | 'photo_library' }[] = [
+  { id: 'feed', label: 'Feed', ios: 'square.grid.2x2', android: 'dashboard' },
   { id: 'grid', label: 'Grid', ios: 'square.grid.3x3', android: 'grid_on' },
   { id: 'albums', label: 'Albums', ios: 'rectangle.stack', android: 'photo_library' },
 ];
 
 export default function HomeScreen() {
-  const { library, data } = useGallery();
+  const { library, data, scoped, burstCounts } = useGallery();
   const accent = useAccent();
   const theme = useTheme();
+  const t = useT();
   const width = useAppWidth();
+  // A Pinterest-style masonry: two columns on phones, more on wide screens.
+  const columns = Math.max(2, Math.floor(width / MIN_COLUMN_WIDTH));
+  const pinWidth = (width - FEED_GAP * (columns + 1)) / columns;
   const [layout, setLayout] = useState<Layout>('feed');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [noteItem, setNoteItem] = useState<string | null>(null);
-  const [saveItem, setSaveItem] = useState<string | null>(null);
   const [menuItem, setMenuItem] = useState<string | null>(null);
   const [scrolled, setScrolled] = useState(false);
   // Tapping the Home tab while already on Home scrolls the feed back to the top.
-  const feed = useRef<FlatList>(null);
+  const feed = useRef<FlashListRef<MediaItem>>(null);
   const navigation = useNavigation();
   useEffect(
     () =>
@@ -71,12 +77,7 @@ export default function HomeScreen() {
     setSelectSeed((s) => ({ id: itemId, n: (s?.n ?? 0) + 1 }));
   };
 
-  const items = scopeItems('all', library.items, data);
-  const saved = new Set(data.collections.flatMap((c) => c.items.map((e) => e.id)));
-  const burstCounts = new Map<string, number>();
-  for (const item of library.items) {
-    if (item.burstId) burstCounts.set(item.burstId, (burstCounts.get(item.burstId) ?? 0) + 1);
-  }
+  const items = scoped('all');
 
   // The view switcher floats over the list; once content scrolls under it, it turns
   // 80% transparent (with a blur) so the photos show through.
@@ -106,7 +107,7 @@ export default function HomeScreen() {
               key={option.id}
               accessibilityRole="tab"
               accessibilityState={{ selected: active }}
-              accessibilityLabel={`${option.label} view`}
+              accessibilityLabel={t('{name} view', { name: t(option.label) })}
               onPress={() => {
                 setLayout(option.id);
                 setScrolled(false);
@@ -127,7 +128,7 @@ export default function HomeScreen() {
               <ThemedText
                 type="smallBold"
                 style={[styles.switchLabel, { color: active ? theme.text : theme.textSecondary }]}>
-                {option.label}
+                {t(option.label)}
               </ThemedText>
             </Pressable>
           );
@@ -140,15 +141,15 @@ export default function HomeScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <AppBar
-          title="Gallery"
+          title={t('Gally-ri')}
           brand
           actions={
             <>
-              <IconButton label="Search" onPress={() => router.push('/search')}>
+              <IconButton label={t('Search')} onPress={() => router.push('/search')}>
                 <Icon ios="magnifyingglass" android="search" />
               </IconButton>
               <IconButton
-                label="Liked"
+                label={t('Liked')}
                 onPress={() => router.push({ pathname: '/album', params: { scope: 'liked' } })}>
                 <Icon ios="heart" android="favorite_border" />
               </IconButton>
@@ -166,6 +167,7 @@ export default function HomeScreen() {
             items={items}
             scope="all"
             columns={4}
+            masonry
             likes={data.likes}
             edits={data.edits}
             burstCounts={burstCounts}
@@ -178,13 +180,16 @@ export default function HomeScreen() {
             onSelectingChange={setGridSelecting}
           />
         ) : (
-          <FlatList
+          <FlashList
             ref={feed}
+            key={columns}
             data={items.slice(0, visibleCount)}
             keyExtractor={(item) => item.id}
             extraData={data}
+            masonry
+            numColumns={columns}
             ListHeaderComponent={listHeader}
-            contentContainerStyle={styles.feed}
+            contentContainerStyle={{ ...styles.feed, paddingHorizontal: FEED_GAP / 2 }}
             // Pull down to rescan the photo library.
             onRefresh={loadLibrary}
             refreshing={library.status === 'loading' && library.items.length > 0}
@@ -192,26 +197,21 @@ export default function HomeScreen() {
             scrollEventThrottle={32}
             onEndReached={() => setVisibleCount((c) => Math.min(c + PAGE_SIZE, items.length))}
             onEndReachedThreshold={2}
-            initialNumToRender={3}
-            maxToRenderPerBatch={3}
-            windowSize={5}
-            removeClippedSubviews
             renderItem={({ item }) => (
-              <PostCard
-                item={item}
-                scope="all"
-                width={width}
-                edit={data.edits[item.id]}
-                liked={!!data.likes[item.id]}
-                saved={saved.has(item.id)}
-                note={data.notes[item.id]}
-                hideDates={data.settings.hideDates}
-                onNote={setNoteItem}
-                onSave={setSaveItem}
-                title={data.titles[item.id]}
-                onMore={setMenuItem}
-                onSelect={startSelecting}
-              />
+              <View style={styles.pin}>
+                <PinCard
+                  item={item}
+                  scope="all"
+                  width={pinWidth}
+                  edit={data.edits[item.id]}
+                  liked={!!data.likes[item.id]}
+                  note={data.notes[item.id]}
+                  title={data.titles[item.id]}
+                  onNote={setNoteItem}
+                  onMore={setMenuItem}
+                  onSelect={startSelecting}
+                />
+              </View>
             )}
           />
         )}
@@ -221,10 +221,10 @@ export default function HomeScreen() {
 
       <TextPrompt
         visible={noteItem !== null}
-        title="Private note"
-        placeholder="What do you remember about this moment?"
+        title={t('Private note')}
+        placeholder={t('What do you remember about this moment?')}
         initialValue={noteItem ? data.notes[noteItem]?.text : ''}
-        submitLabel="Save note"
+        submitLabel={t('Save note')}
         multiline
         onClose={() => setNoteItem(null)}
         onSubmit={(text) => {
@@ -232,7 +232,6 @@ export default function HomeScreen() {
           setNote(noteItem, text);
         }}
       />
-      <CollectionPicker itemId={saveItem} onClose={() => setSaveItem(null)} />
       <ItemActions itemId={menuItem} onClose={() => setMenuItem(null)} onSelect={startSelecting} />
     </ThemedView>
   );
@@ -253,16 +252,22 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
+    alignItems: 'center',
+    paddingHorizontal: Spacing.three,
     paddingTop: Spacing.one,
     paddingBottom: Spacing.two,
   },
   feed: {
     paddingBottom: BottomTabInset + Spacing.four,
   },
+  pin: {
+    paddingHorizontal: FEED_GAP / 2,
+  },
   switcher: {
     flexDirection: 'row',
     overflow: 'hidden',
-    marginHorizontal: Spacing.three,
+    width: '100%',
+    maxWidth: MaxFeedWidth - Spacing.three * 2,
     padding: Spacing.one,
     borderRadius: Spacing.four,
     gap: Spacing.one,

@@ -3,13 +3,15 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { copyAsync } from 'expo-file-system/legacy';
 import { Alert } from 'react-native';
 
+import { t, tn } from '@/lib/i18n';
+
 /** A file imported into the app's private storage. */
 export type StoredFile = { id: string; name: string; size: number; uri: string };
 
-export type FileKind = 'pdf' | 'audio';
+export type FileKind = 'audio';
 
-const TYPES: Record<FileKind, string> = { pdf: 'application/pdf', audio: 'audio/*' };
-const FOLDERS: Record<FileKind, string> = { pdf: 'pdfs', audio: 'music' };
+const TYPES: Record<FileKind, string> = { audio: 'audio/*' };
+const FOLDERS: Record<FileKind, string> = { audio: 'music' };
 
 const newId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
@@ -52,7 +54,10 @@ export async function pickAndStore(kind: FileKind): Promise<StoredFile[]> {
     stored.push({ id, name: asset.name.replace(/\.\w+$/, ''), size: asset.size ?? 0, uri: `doc:${FOLDERS[kind]}/${fileName}` });
   }
   if (failed > 0) {
-    Alert.alert('Some files couldn’t be imported', `${failed} ${failed === 1 ? 'file' : 'files'} couldn’t be copied into the app.`);
+    Alert.alert(
+      t('Some files couldn’t be imported'),
+      tn(failed, '{n} file couldn’t be copied into the app.', '{n} files couldn’t be copied into the app.')
+    );
   }
   return stored;
 }
@@ -60,10 +65,11 @@ export async function pickAndStore(kind: FileKind): Promise<StoredFile[]> {
 /**
  * The stored file in the current documents folder. Accepts `doc:<folder>/<name>` and the
  * absolute `file://…/<folder>/<name>` URIs saved by earlier versions (re-rooted, since that
- * folder's absolute path may have changed). Remote URLs (sample songs) pass through.
+ * folder's absolute path may have changed).
  */
 function resolve(uri: string) {
-  // Files found on the device (picked folders) are read in place.
+  // Files found on the device (picked folders) are read in place. `pdfs` held the removed
+  // PDF reader's copies; it's still matched so they can be deleted.
   if (uri.startsWith('content://') || isDeviceFile(uri)) return new File(uri);
   const match = uri.match(/^doc:(\w+)\/(.+)$/) ?? uri.match(/\/(pdfs|music)\/([^/]+)$/);
   return match ? new File(new Directory(Paths.document, match[1]), decodeURIComponent(match[2])) : null;
@@ -74,28 +80,6 @@ export async function storedUrl(uri: string) {
   if (/^https?:/.test(uri)) return uri;
   const file = resolve(uri);
   return file?.exists ? file.uri : null;
-}
-
-/**
- * The reader gets the whole file as base64 in memory (several copies of it, across the
- * bridge), so larger files would crash it instead of opening.
- */
-export const MAX_READER_BYTES = 60 * 1024 * 1024;
-export const TOO_LARGE = 'too-large';
-
-/**
- * The file's bytes as base64 (the PDF annotator loads documents this way), null if gone,
- * or `TOO_LARGE` past `MAX_READER_BYTES`.
- */
-export async function storedBase64(uri: string): Promise<string | null> {
-  const file = resolve(uri);
-  if (!file?.exists) return null;
-  if (file.size > MAX_READER_BYTES) return TOO_LARGE;
-  try {
-    return await file.base64();
-  } catch {
-    return null;
-  }
 }
 
 const isDeviceFile = (uri: string) => uri.startsWith('file://') && !/\/(pdfs|music)\/[^/]+$/.test(uri);

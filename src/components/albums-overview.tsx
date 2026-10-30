@@ -14,17 +14,19 @@ import { Icon } from '@/components/icon';
 import { Sheet } from '@/components/sheet';
 import { TextPrompt } from '@/components/text-prompt';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, Spacing } from '@/constants/theme';
+import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAccent, useGallery } from '@/hooks/use-gallery';
 import { useTheme } from '@/hooks/use-theme';
+import { useT } from '@/lib/i18n';
 import { buildAlbums, type Album } from '@/lib/scopes';
 import { confirmAction } from '@/lib/ui';
 import { showToast } from '@/lib/toast';
 import { createFolder, deleteFolder, setFolderHidden } from '@/lib/user-data';
-import { useVaultUnlocked } from '@/lib/vault';
 
-/** The vault, smart albums, Recently deleted and years. Shown on the Albums tab and Home. */
+/**
+ * Folders, smart albums, Recently deleted and years. Shown on the Albums page and Home. The
+ * vault is only reached from the side panel.
+ */
 export function AlbumsOverview({
   header,
   onScroll,
@@ -32,14 +34,14 @@ export function AlbumsOverview({
   header?: ReactNode;
   onScroll?: (e: NativeSyntheticEvent<NativeScrollEvent>) => void;
 }) {
-  const { library, data, vaultCount, trashCount } = useGallery();
+  const { library, data, trashCount } = useGallery();
   const accent = useAccent();
   const theme = useTheme();
-  const unlocked = useVaultUnlocked();
+  const t = useT();
   const [naming, setNaming] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
   const [options, setOptions] = useState<Album | null>(null);
-  const albums = buildAlbums(library.items, data);
+  const albums = buildAlbums(library.items, data, t);
   const hiddenIds = new Set(data.folders.filter((f) => f.hidden).map((f) => `folder:${f.id}`));
   const folders = albums.folders.filter((album) => showHidden || !hiddenIds.has(album.scope));
   const optionsHidden = !!options && hiddenIds.has(options.scope);
@@ -50,38 +52,14 @@ export function AlbumsOverview({
     <ScrollView contentContainerStyle={styles.content} onScroll={onScroll} scrollEventThrottle={32}>
       {header}
       <View style={styles.body}>
-        <Pressable
-          onPress={() => router.push('/vault')}
-          accessibilityLabel="Vault"
-          style={({ pressed }) => pressed && styles.pressed}>
-          <ThemedView type="backgroundElement" style={styles.vault}>
-            <View style={[styles.vaultIcon, { backgroundColor: accent }]}>
-              <Icon
-                ios={unlocked ? 'lock.open.fill' : 'lock.fill'}
-                android={unlocked ? 'lock_open' : 'lock'}
-                color="#fff"
-              />
-            </View>
-            <View style={styles.flex}>
-              <ThemedText type="smallBold">Vault</ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                {data.vault
-                  ? `${vaultCount} saved · ${data.collections.length} albums · passcode protected`
-                  : 'Save photos privately behind a passcode'}
-              </ThemedText>
-            </View>
-            <Icon ios="chevron.right" android="chevron_right" size={16} color={theme.textSecondary} />
-          </ThemedView>
-        </Pressable>
-
         <View style={styles.sectionHeader}>
           <ThemedText type="smallBold" style={[styles.sectionTitle, styles.flex]}>
-            Folders
+            {t('Folders')}
           </ThemedText>
           {hiddenIds.size > 0 && (
             <Pressable onPress={() => setShowHidden((s) => !s)} hitSlop={8} style={({ pressed }) => pressed && styles.pressed}>
               <ThemedText type="small" style={[styles.sectionTitleAction, { color: accent }]}>
-                {showHidden ? 'Hide hidden' : `Show hidden (${hiddenIds.size})`}
+                {showHidden ? t('Hide hidden') : t('Show hidden ({n})', { n: hiddenIds.size })}
               </ThemedText>
             </Pressable>
           )}
@@ -89,12 +67,12 @@ export function AlbumsOverview({
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.years}>
           <Pressable
             onPress={() => setNaming(true)}
-            accessibilityLabel="New folder"
+            accessibilityLabel={t('New folder')}
             style={({ pressed }) => pressed && styles.pressed}>
             <View style={[styles.newFolder, { borderColor: theme.backgroundSelected }]}>
               <Icon ios="folder.badge.plus" android="create_new_folder" size={30} color={accent} />
               <ThemedText type="smallBold" style={{ color: accent }}>
-                New folder
+                {t('New folder')}
               </ThemedText>
             </View>
           </Pressable>
@@ -106,14 +84,14 @@ export function AlbumsOverview({
         </ScrollView>
 
         <ThemedText type="smallBold" style={styles.sectionTitle}>
-          Media types
+          {t('Media types')}
         </ThemedText>
         <View style={[styles.list, { backgroundColor: theme.backgroundElement }]}>
           {[
             ...albums.smart,
             {
               scope: 'trash' as const,
-              title: 'Recently deleted',
+              title: t('Recently deleted'),
               items: [],
               icon: { ios: 'trash' as const, android: 'delete' as const },
             },
@@ -137,7 +115,7 @@ export function AlbumsOverview({
         </View>
 
         <ThemedText type="smallBold" style={styles.sectionTitle}>
-          By year
+          {t('By year')}
         </ThemedText>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.years}>
           {albums.years.map((album) => (
@@ -151,7 +129,7 @@ export function AlbumsOverview({
             <Pressable
               onPress={() => {
                 setFolderHidden(options.scope.replace('folder:', ''), !optionsHidden);
-                if (!optionsHidden) showToast(`“${options.title}” hidden from Albums`);
+                if (!optionsHidden) showToast(t('“{name}” hidden from Albums', { name: options.title }));
                 setOptions(null);
               }}
               style={({ pressed }) => [styles.listRow, pressed && styles.pressed]}>
@@ -160,13 +138,13 @@ export function AlbumsOverview({
                 android={optionsHidden ? 'visibility' : 'visibility_off'}
                 color={accent}
               />
-              <ThemedText style={styles.flex}>{optionsHidden ? 'Unhide album' : 'Hide album'}</ThemedText>
+              <ThemedText style={styles.flex}>{optionsHidden ? t('Unhide album') : t('Hide album')}</ThemedText>
             </Pressable>
             <Pressable
               onPress={() => {
                 const album = options;
                 setOptions(null);
-                confirmAction(`Delete “${album.title}”?`, 'Only the folder is removed; its photos stay in your gallery.', 'Delete', () =>
+                confirmAction(t('Delete “{name}”?', { name: album.title }), t('Only the folder is removed; its photos stay in your gallery.'), t('Delete'), () =>
                   deleteFolder(album.scope.replace('folder:', ''))
                 );
               }}
@@ -176,19 +154,19 @@ export function AlbumsOverview({
                 pressed && styles.pressed,
               ]}>
               <Icon ios="trash" android="delete" color="#E5484D" />
-              <ThemedText style={[styles.flex, { color: '#E5484D' }]}>Delete album</ThemedText>
+              <ThemedText style={[styles.flex, { color: '#E5484D' }]}>{t('Delete album')}</ThemedText>
             </Pressable>
           </View>
         )}
       </Sheet>
       <TextPrompt
         visible={naming}
-        title="New folder"
-        placeholder="e.g. Trip to Rome"
-        submitLabel="Create"
+        title={t('New folder')}
+        placeholder={t('e.g. Trip to Rome')}
+        submitLabel={t('Create')}
         onClose={() => setNaming(false)}
         onSubmit={(name) => {
-          const id = createFolder(name);
+          const id = createFolder(name.trim() || t('New folder'));
           router.push({ pathname: '/album', params: { scope: `folder:${id}` } });
         }}
       />
@@ -204,6 +182,9 @@ const styles = StyleSheet.create({
     paddingBottom: BottomTabInset + Spacing.five,
   },
   body: {
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    alignSelf: 'center',
     paddingHorizontal: Spacing.three,
     gap: Spacing.three,
   },
@@ -220,20 +201,6 @@ const styles = StyleSheet.create({
   },
   hiddenFolder: {
     opacity: 0.5,
-  },
-  vault: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-    padding: Spacing.three,
-    borderRadius: Spacing.four,
-  },
-  vaultIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   list: {
     borderRadius: Spacing.three,

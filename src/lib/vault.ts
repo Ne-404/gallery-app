@@ -31,7 +31,7 @@ AppState.addEventListener('change', (state) => {
 });
 
 /** Ids of every item in the vault. Saved items are hidden everywhere else in the app. */
-export function vaultIds(data: UserData) {
+export function vaultIds(data: Pick<UserData, 'collections'>) {
   return new Set(data.collections.flatMap((c) => c.items.map((e) => e.id)));
 }
 

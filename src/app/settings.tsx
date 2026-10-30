@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppBar } from '@/components/app-bar';
@@ -17,7 +17,8 @@ import {
 import { useAccent, useGallery } from '@/hooks/use-gallery';
 import { useTheme } from '@/hooks/use-theme';
 import { Challenges } from '@/lib/challenges';
-import { loadLibrary, switchToDemoLibrary } from '@/lib/media';
+import { Languages, resolveLanguage, setLanguage, useIsRTL, useT } from '@/lib/i18n';
+import { loadLibrary } from '@/lib/media';
 import { notificationsSupported, setReminder } from '@/lib/notifications';
 import { confirmAction, openSidePanel } from '@/lib/ui';
 import { resetUserData, updateSettings } from '@/lib/user-data';
@@ -26,51 +27,89 @@ export default function SettingsScreen() {
   const { library, data, unlocked, itemCount, vaultCount } = useGallery();
   const accent = useAccent();
   const theme = useTheme();
+  const t = useT();
+  // Native swaps `left` in right-to-left layouts; web doesn't.
+  const isRTL = useIsRTL();
+  const labelAlign = Platform.OS === 'web' && isRTL ? 'right' : 'left';
   const { settings } = data;
-  const notice = libraryNotice(library);
+  const notice = libraryNotice(library, t);
 
   const toggleReminder = async (kind: 'memoryReminders' | 'challengeReminders', value: boolean) => {
     const ok = await setReminder(kind, value, null);
     if (!ok) {
-      Alert.alert('Notifications are off', 'Allow notifications for this app in system settings.');
+      Alert.alert(t('Notifications are off'), t('Allow notifications for this app in system settings.'));
     }
   };
 
   const confirmReset = () =>
     confirmAction(
-      'Erase app data?',
-      'Deletes all likes, notes, vault albums, the vault passcode and challenge progress stored by this app. Your photos are not touched.',
-      'Erase',
+      t('Erase app data?'),
+      t('Deletes all likes, notes, vault albums, the vault passcode and challenge progress stored by this app. Your photos are not touched.'),
+      t('Erase'),
       resetUserData
     );
 
-  const challengeFor = (name: AccentName) =>
-    Challenges.find((c) => c.reward.type === 'accent' && c.reward.accent === name)?.title;
+  const challengeFor = (name: AccentName) => {
+    const challenge = Challenges.find((c) => c.reward.type === 'accent' && c.reward.accent === name);
+    return challenge ? t(challenge.title) : '';
+  };
+  // Arabic lays the app out right to left; on a phone that takes a quick restart.
+  const flipsLayout = (id: (typeof Languages)[number]['id']) =>
+    Platform.OS !== 'web' && (resolveLanguage(id) === 'ar') !== (resolveLanguage(settings.language) === 'ar');
+  const chooseLanguage = (id: (typeof Languages)[number]['id']) => {
+    if (id === settings.language) return;
+    if (!flipsLayout(id)) setLanguage(id);
+    else confirmAction(t('Change language?'), t('Gally-ri restarts to switch the layout direction.'), t('Restart'), () => setLanguage(id));
+  };
 
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-        <AppBar title="Settings" leading="back" />
+        <AppBar title={t('Settings')} leading="back" />
         <ScrollView contentContainerStyle={styles.content}>
           <ThemedView type="backgroundElement" style={styles.privacy}>
             <Icon ios="lock.shield.fill" android="shield" size={28} color={accent} />
             <View style={styles.flex}>
-              <ThemedText type="smallBold">100% private, 100% on-device</ThemedText>
+              <ThemedText type="smallBold">{t('100% private, 100% on-device')}</ThemedText>
               <ThemedText type="small" themeColor="textSecondary">
-                Your photos are never uploaded. Likes, notes, collections, reels and insights are
-                created and stored only on this phone.
+                {t('Your photos are never uploaded. Likes, notes, collections, reels and insights are created and stored only on this phone.')}
               </ThemedText>
             </View>
           </ThemedView>
 
-          <Section title="LIBRARY">
-            <Row label="Source" value={library.source === 'device' ? 'Camera roll' : 'Demo media'} />
-            <Row label="Items" value={String(itemCount)} />
+          <Section title={t('LANGUAGE')}>
+            {Languages.map(({ id, label }, i) => (
+              <Pressable
+                key={id}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: settings.language === id }}
+                onPress={() => chooseLanguage(id)}
+                style={[styles.row, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: theme.border }]}>
+                <View style={styles.flex}>
+                  {/* Languages are named in themselves; "System" follows the app language. */}
+                  {/* Aligned with the app, not the label's own script (العربية in an English UI). */}
+                  <ThemedText style={{ textAlign: labelAlign }}>{id === 'system' ? t('System') : label}</ThemedText>
+                </View>
+                <Icon
+                  ios={settings.language === id ? 'largecircle.fill.circle' : 'circle'}
+                  android={settings.language === id ? 'radio_button_checked' : 'radio_button_unchecked'}
+                  color={settings.language === id ? accent : undefined}
+                />
+              </Pressable>
+            ))}
+          </Section>
+
+          <Section title={t('LIBRARY')}>
+            <Row label={t('Source')} value={
+                library.source === 'device'
+                  ? t('Camera roll')
+                  : library.source === 'demo'
+                    ? t('Sample photos')
+                    : t('Not connected')
+              } />
+            <Row label={t('Items')} value={String(itemCount)} />
             {library.source === 'device' ? (
-              <>
-                <Button label="Rescan library" onPress={loadLibrary} color={accent} />
-                <Button label="Switch to demo media" onPress={switchToDemoLibrary} color={accent} />
-              </>
+              <Button label={t('Rescan library')} onPress={loadLibrary} color={accent} />
             ) : (
               // The camera roll button only shows where it can work (not on web or in Expo Go).
               notice && (
@@ -84,9 +123,9 @@ export default function SettingsScreen() {
             )}
           </Section>
 
-          <Section title="PRIVACY">
+          <Section title={t('PRIVACY')}>
             <Toggle
-              label="Hide photo dates"
+              label={t('Hide photo dates')}
               value={settings.hideDates}
               onChange={(v) => {
                 updateSettings({ hideDates: v });
@@ -94,73 +133,48 @@ export default function SettingsScreen() {
             />
           </Section>
 
-          <Section title="VIDEO PLAYER">
-            {(
-              [
-                ['builtin', 'Built-in player', 'System controls: scrubber, volume, full screen'],
-                ['minimal', 'Gallery player', 'Clean and minimal: tap to play or pause'],
-                ['external', 'Another app', 'Open videos in VLC, MX Player, Photos…'],
-              ] as const
-            ).map(([id, label, hint], i) => (
-              <Pressable
-                key={id}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: settings.videoPlayer === id }}
-                onPress={() => updateSettings({ videoPlayer: id })}
-                style={[styles.row, styles.option, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: theme.border }]}>
-                <View style={styles.flex}>
-                  <ThemedText>{label}</ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    {hint}
-                  </ThemedText>
-                </View>
-                <Icon
-                  ios={settings.videoPlayer === id ? 'largecircle.fill.circle' : 'circle'}
-                  android={settings.videoPlayer === id ? 'radio_button_checked' : 'radio_button_unchecked'}
-                  color={settings.videoPlayer === id ? accent : undefined}
-                />
-              </Pressable>
-            ))}
-          </Section>
-
-          <Section title="NOTIFICATIONS">
+          <Section title={t('NOTIFICATIONS')}>
             {!notificationsSupported && (
               <ThemedText type="small" themeColor="textSecondary" style={styles.note}>
-                Reminders aren’t available here. On Android they need a development build
-                instead of Expo Go.
+                {t('Reminders aren’t available here. On Android they need a development build instead of Expo Go.')}
               </ThemedText>
             )}
             <Toggle
               disabled={!notificationsSupported}
-              label="Morning memories (9:00)"
+              label={t('Morning memories (9:00)')}
               value={settings.memoryReminders}
               onChange={(v) => toggleReminder('memoryReminders', v)}
             />
             <Toggle
               disabled={!notificationsSupported}
-              label="Evening check-in (20:00)"
+              label={t('Evening check-in (20:00)')}
               value={settings.challengeReminders}
               onChange={(v) => toggleReminder('challengeReminders', v)}
             />
           </Section>
 
-          <Section title="VAULT">
-            <Row label="Status" value={data.vault ? `Locked · ${vaultCount} saved` : 'No passcode yet'} />
+          <Section title={t('VAULT')}>
+            <Row label={t('Status')} value={data.vault ? t('Locked · {n} saved', { n: vaultCount }) : t('No passcode yet')} />
             <Button
-              label={data.vault ? 'Open vault' : 'Set up vault passcode'}
+              label={data.vault ? t('Open vault') : t('Set up vault passcode')}
               onPress={() => router.push('/vault')}
               color={accent}
             />
           </Section>
 
-          <Section title="THEME">
-            <Row label="Current" value={Appearances.find((a) => a.id === settings.appearance)?.label ?? ''} />
+          <Section title={t('THEME')}>
+            <Row
+              label={t('Current')}
+              value={(() => {
+                const current = Appearances.find((a) => a.id === settings.appearance);
+                return current ? t(current.label) : '';
+              })()}
+            />
             <ThemedText type="small" themeColor="textSecondary" style={styles.note}>
-              Themes live in one place: open the menu and press and hold the theme circle, then
-              slide to Light, Dark, Brutal, Blood Moon or Pop Art.
+              {t('Themes live in one place: open the menu and press and hold the theme circle, then slide to Light, Dark, Brutal, Pop Art or Pirate.')}
             </ThemedText>
             <Button
-              label="Open the theme circle"
+              label={t('Open the theme circle')}
               onPress={() => {
                 router.back();
                 openSidePanel();
@@ -169,7 +183,7 @@ export default function SettingsScreen() {
             />
           </Section>
 
-          <Section title="ACCENT COLOR">
+          <Section title={t('ACCENT COLOR')}>
             <View style={styles.accents}>
               {(Object.keys(Accents) as AccentName[]).map((name) => {
                 const isUnlocked = unlocked.accents.has(name);
@@ -179,7 +193,7 @@ export default function SettingsScreen() {
                     key={name}
                     onPress={() => {
                       if (!isUnlocked) {
-                        Alert.alert('Locked theme', `Complete “${challengeFor(name)}” in Insights to unlock it.`);
+                        Alert.alert(t('Locked theme'), t('Complete “{name}” in Insights to unlock it.', { name: challengeFor(name) }));
                         return;
                       }
                       updateSettings({ accent: name });
@@ -194,19 +208,19 @@ export default function SettingsScreen() {
                       {!isUnlocked && <Icon ios="lock.fill" android="lock" size={16} color="#fff" />}
                       {selected && <Icon ios="checkmark" android="check" size={18} color="#fff" />}
                     </View>
-                    <ThemedText type="small">{Accents[name].label}</ThemedText>
+                    <ThemedText type="small">{t(Accents[name].label)}</ThemedText>
                   </Pressable>
                 );
               })}
             </View>
-            <Row label="Cinematic reels" value={unlocked.cinematic ? 'Unlocked' : 'Locked: Weekly Story'} />
+            <Row label={t('Cinematic reels')} value={unlocked.cinematic ? t('Unlocked') : t('Locked: Weekly Story')} />
           </Section>
 
-          <Section title="YOUR DATA">
-            <Row label="Likes" value={String(Object.keys(data.likes).length)} />
-            <Row label="Notes" value={String(Object.keys(data.notes).length)} />
-            <Row label="Vault albums" value={String(data.collections.length)} />
-            <Button label="Erase app data" onPress={confirmReset} color="#E5484D" />
+          <Section title={t('YOUR DATA')}>
+            <Row label={t('Likes')} value={String(Object.keys(data.likes).length)} />
+            <Row label={t('Notes')} value={String(Object.keys(data.notes).length)} />
+            <Row label={t('Vault albums')} value={String(data.collections.length)} />
+            <Button label={t('Erase app data')} onPress={confirmReset} color="#E5484D" />
           </Section>
         </ScrollView>
       </SafeAreaView>
@@ -229,9 +243,11 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <View style={styles.row}>
-      <ThemedText>{label}</ThemedText>
-      <ThemedText themeColor="textSecondary">{value}</ThemedText>
+    <View style={[styles.row, styles.split]}>
+      <ThemedText style={styles.shrink}>{label}</ThemedText>
+      <ThemedText themeColor="textSecondary" style={styles.shrink}>
+        {value}
+      </ThemedText>
     </View>
   );
 }
@@ -307,6 +323,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minHeight: 48,
   },
+  // Long labels (Turkish, small phones) wrap instead of pushing the value off screen.
+  split: {
+    gap: Spacing.three,
+  },
+  shrink: {
+    flexShrink: 1,
+  },
   accents: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -331,10 +354,6 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.three,
   },
   // Two-line choices need room: padding and a divider tell them apart.
-  option: {
-    gap: Spacing.three,
-    paddingVertical: Spacing.three,
-  },
   noticeText: {
     paddingBottom: Spacing.two,
   },

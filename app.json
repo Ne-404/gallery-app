@@ -1,19 +1,20 @@
 {
   "expo": {
-    "name": "Gallery",
+    "name": "Gally-ri",
     "slug": "gallery",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "ne404gallery",
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.ne404.gallery",
       "icon": "./assets/expo.icon",
-      "supportsTablet": false,
+      "supportsTablet": true,
       "config": {
         "usesNonExemptEncryption": false
-      }
+      },
+      "requireFullScreen": true
     },
     "android": {
       "package": "com.ne404.gallery",
@@ -44,7 +45,13 @@
           "resizeMode": "contain"
         }
       ],
-      "expo-video",
+      [
+        "expo-video",
+        {
+          "supportsBackgroundPlayback": true,
+          "supportsPictureInPicture": true
+        }
+      ],
       [
         "expo-audio",
         {
@@ -81,7 +88,18 @@
         }
       ],
       "expo-image",
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-localization",
+        {
+          "supportsRTL": true,
+          "supportedLocales": [
+            "en",
+            "ar",
+            "tr"
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

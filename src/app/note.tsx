@@ -18,10 +18,11 @@ import { Icon } from '@/components/icon';
 import { Sheet } from '@/components/sheet';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAccent, useGallery } from '@/hooks/use-gallery';
 import { useTheme } from '@/hooks/use-theme';
 import { timeAgo } from '@/lib/dates';
+import { useT, type TKey } from '@/lib/i18n';
 import { continueList, NOTE_COLORS, parseLines, prefixLine, toggleLine } from '@/lib/notes';
 import { confirmAction } from '@/lib/ui';
 import { useVaultUnlocked } from '@/lib/vault';
@@ -34,6 +35,15 @@ import {
   type NoteColor,
 } from '@/lib/user-data';
 
+const COLOR_NAMES: Record<NoteColor, TKey> = {
+  none: 'No color',
+  yellow: 'Yellow',
+  green: 'Green',
+  blue: 'Blue',
+  pink: 'Pink',
+  purple: 'Purple',
+};
+
 /**
  * Note editor, for freestanding notes (`?id=`, or none for a new one) and photo notes
  * (`?photo=`). Everything saves as you type.
@@ -44,6 +54,7 @@ export default function NoteScreen() {
   const vaultUnlocked = useVaultUnlocked();
   const accent = useAccent();
   const theme = useTheme();
+  const t = useT();
   const [noteId, setNoteId] = useState(params.id ?? null);
   const note = noteId ? data.journal.find((n) => n.id === noteId) : undefined;
   const photoId = params.photo;
@@ -109,37 +120,37 @@ export default function NoteScreen() {
     <ThemedView style={[styles.container, tint && { backgroundColor: `${tint}${theme.dark ? '22' : '1A'}` }]}>
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
         <View style={styles.bar}>
-          <IconButton label="Back" onPress={close}>
+          <IconButton label={t('Back')} onPress={close}>
             <Icon ios="chevron.left" android="arrow_back" />
           </IconButton>
           <View style={styles.flex} />
           {!photoId && (
             <>
               <IconButton
-                label={note?.pinned ? 'Unpin' : 'Pin'}
+                label={note?.pinned ? t('Unpin') : t('Pin')}
                 onPress={() => {
                   if (noteId) updateJournalNote(noteId, { pinned: !note?.pinned }, false);
                   else setNoteId(createJournalNote({ title, body, pinned: true }));
                 }}>
                 <Icon ios={note?.pinned ? 'pin.fill' : 'pin'} android="push_pin" color={note?.pinned ? accent : undefined} />
               </IconButton>
-              <IconButton label="Color" onPress={() => setPalette((p) => !p)}>
+              <IconButton label={t('Color')} onPress={() => setPalette((p) => !p)}>
                 <Icon ios="paintpalette" android="palette" />
               </IconButton>
-              <IconButton label="Attach photo" onPress={() => setAttaching(true)}>
+              <IconButton label={t('Attach photo')} onPress={() => setAttaching(true)}>
                 <Icon ios="photo.badge.plus" android="add_photo_alternate" />
               </IconButton>
             </>
           )}
           <IconButton
-            label="Share note"
+            label={t('Share note')}
             onPress={() => Share.share({ message: [title, body].filter(Boolean).join('\n\n') }).catch(() => {})}>
             <Icon ios="square.and.arrow.up" android="share" />
           </IconButton>
           <IconButton
-            label="Delete note"
+            label={t('Delete note')}
             onPress={() =>
-              confirmAction('Delete this note?', 'This can’t be undone.', 'Delete', () => {
+              confirmAction(t('Delete this note?'), t('This can’t be undone.'), t('Delete'), () => {
                 if (photoId) setNote(photoId, '');
                 else if (noteId) deleteJournalNote(noteId);
                 close();
@@ -154,7 +165,7 @@ export default function NoteScreen() {
             {(Object.keys(NOTE_COLORS) as NoteColor[]).map((color) => (
               <Pressable
                 key={color}
-                accessibilityLabel={`${color} note`}
+                accessibilityLabel={t(COLOR_NAMES[color])}
                 onPress={() => {
                   if (noteId) updateJournalNote(noteId, { color }, false);
                   else setNoteId(createJournalNote({ title, body, color }));
@@ -176,17 +187,19 @@ export default function NoteScreen() {
             </Pressable>
           )}
           {photoId ? (
-            <ThemedText style={styles.titleInput}>{data.titles[photoId] ?? 'Photo note'}</ThemedText>
+            <ThemedText style={styles.titleInput}>{data.titles[photoId] ?? t('Photo note')}</ThemedText>
           ) : (
             <TextInput
               value={title}
-              onChangeText={(t) => {
-                setTitle(t);
-                save({ title: t });
+              onChangeText={(text) => {
+                setTitle(text);
+                save({ title: text });
               }}
-              placeholder="Title"
+              placeholder={t('Title')}
               placeholderTextColor={theme.textSecondary}
-              accessibilityLabel="Note title"
+              accessibilityLabel={t('Note title')}
+              // A brand-new note starts at its title.
+              autoFocus={!note && !body}
               style={[styles.titleInput, { color: theme.text }, noFocusRing]}
             />
           )}
@@ -197,16 +210,16 @@ export default function NoteScreen() {
               value={body}
               onChangeText={changeBody}
               onSelectionChange={(e) => setCursor(e.nativeEvent.selection.start)}
-              placeholder="Start writing…"
+              placeholder={t('Start writing…')}
               placeholderTextColor={theme.textSecondary}
-              accessibilityLabel="Note text"
+              accessibilityLabel={t('Note text')}
               multiline
               autoFocus={!!body || !!photoId || !!note}
               scrollEnabled={false}
               style={[styles.body, { color: theme.text }, noFocusRing]}
             />
           ) : (
-            <Pressable onPress={() => setEditing(true)} accessibilityLabel="Edit note" style={styles.reader}>
+            <Pressable onPress={() => setEditing(true)} accessibilityLabel={t('Edit note')} style={styles.reader}>
               {parseLines(body).map((line, i) =>
                 line.type === 'check' ? (
                   <View key={i} style={styles.checkRow}>
@@ -214,7 +227,7 @@ export default function NoteScreen() {
                       hitSlop={8}
                       accessibilityRole="checkbox"
                       accessibilityState={{ checked: line.done }}
-                      accessibilityLabel={line.text || 'Checklist item'}
+                      accessibilityLabel={line.text || t('Checklist item')}
                       onPress={() => {
                         const next = toggleLine(body, i);
                         setBody(next);
@@ -264,32 +277,34 @@ export default function NoteScreen() {
         <View style={[styles.toolbar, { borderColor: theme.backgroundSelected }]}>
           {editing ? (
             <>
-              <IconButton label="Checklist" onPress={() => insert('☐ ')}>
+              <IconButton label={t('Checklist')} onPress={() => insert('☐ ')}>
                 <Icon ios="checklist" android="checklist" />
               </IconButton>
-              <IconButton label="Bullet" onPress={() => insert('• ')}>
+              <IconButton label={t('Bullet')} onPress={() => insert('• ')}>
                 <Icon ios="list.bullet" android="format_list_bulleted" />
               </IconButton>
-              <IconButton label="Heading" onPress={() => insert('# ')}>
+              <IconButton label={t('Heading')} onPress={() => insert('# ')}>
                 <Icon ios="textformat.size" android="title" />
               </IconButton>
             </>
           ) : null}
           <ThemedText type="small" themeColor="textSecondary" style={styles.meta}>
-            {note || photoNote ? `Edited ${timeAgo(note?.updatedAt ?? photoNote!.updatedAt)}` : 'New note'} · {words}{' '}
-            {words === 1 ? 'word' : 'words'}
+            {note || photoNote
+              ? t('Edited {time}', { time: timeAgo(note?.updatedAt ?? photoNote!.updatedAt, t) })
+              : t('New note')}{' '}
+            · {t.n(words, '{n} word', '{n} words')}
           </ThemedText>
           {editing && (
-            <Pressable onPress={() => setEditing(false)} accessibilityLabel="Done editing" style={styles.done}>
+            <Pressable onPress={() => setEditing(false)} accessibilityLabel={t('Done editing')} style={styles.done}>
               <ThemedText type="smallBold" style={{ color: accent }}>
-                Done
+                {t('Done')}
               </ThemedText>
             </Pressable>
           )}
         </View>
       </SafeAreaView>
 
-      <Sheet visible={attaching} title="Attach a photo" onClose={() => setAttaching(false)}>
+      <Sheet visible={attaching} title={t('Attach a photo')} onClose={() => setAttaching(false)}>
         <ScrollView contentContainerStyle={styles.pickGrid}>
           {library.items
             .filter((i) => i.type === 'photo')
@@ -340,6 +355,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   page: {
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    alignSelf: 'center',
     paddingHorizontal: Spacing.four,
     paddingBottom: Spacing.six,
     gap: Spacing.two,

@@ -16,44 +16,54 @@ import { Icon } from '@/components/icon';
 import { MediaGrid } from '@/components/media-grid';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useGallery } from '@/hooks/use-gallery';
 import { useTheme } from '@/hooks/use-theme';
+import { dateLocale, useT, type TKey, type Translator } from '@/lib/i18n';
 import { buildAlbums } from '@/lib/scopes';
 import { searchMedia } from '@/lib/search';
 
-const SUGGESTIONS = ['Videos', 'Live', 'Burst', 'Liked', 'Edited', 'Notes', 'Weekend', 'Summer'];
+/** Suggestion chips and the search each one runs, in the app language. */
+const SUGGESTIONS: { label: TKey; query: (t: Translator) => string }[] = [
+  { label: 'Videos', query: (t) => t('video') },
+  { label: 'Live', query: (t) => t('live') },
+  { label: 'Burst', query: (t) => t('burst') },
+  { label: 'Liked', query: (t) => t('liked') },
+  { label: 'Edited', query: (t) => t('edited') },
+  { label: 'Notes', query: (t) => t('note') },
+  // "Weekend" and "Summer" are friendly aliases for a weekday and a month name.
+  { label: 'Weekend', query: (t) => new Date(2024, 0, 6).toLocaleDateString(dateLocale(t.language), { weekday: 'long' }) },
+  { label: 'Summer', query: (t) => new Date(2024, 6, 1).toLocaleDateString(dateLocale(t.language), { month: 'long' }) },
+];
 
 export default function SearchScreen() {
   const { library, data } = useGallery();
   const theme = useTheme();
+  const t = useT();
   const [query, setQuery] = useState('');
-  const results = searchMedia(query, library.items, data);
-  const albums = buildAlbums(library.items, data);
-  const years = albums.years.map((a) => a.title);
-
-  // "Weekend" and "Summer" are friendly aliases for weekday and month words.
-  const expand = (s: string) =>
-    s === 'Weekend' ? 'saturday' : s === 'Summer' ? 'july' : s === 'Videos' ? 'video' : s;
+  const results = searchMedia(query, library.items, data, t);
+  const albums = buildAlbums(library.items, data, t);
+  const years = albums.years.map((a) => ({ label: a.title, query: a.title }));
+  const suggestions = SUGGESTIONS.map((s) => ({ label: t(s.label), query: s.query(t) }));
 
   // Each chip shows what tapping it finds, so dead ends are hidden. Only counted while the
   // chips are on screen, not on every keystroke.
   const counts: Record<string, number> =
     query.trim() === ''
       ? Object.fromEntries(
-          [...SUGGESTIONS, ...years].map((s) => [s, searchMedia(expand(s).toLowerCase(), library.items, data).length])
+          [...suggestions, ...years].map((s) => [s.label, searchMedia(s.query, library.items, data, t).length])
         )
       : {};
 
-  const choose = (s: string) => {
-    setQuery(expand(s).toLowerCase());
+  const choose = (s: Chip) => {
+    setQuery(s.query.toLocaleLowerCase(dateLocale(t.language)));
   };
 
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <View style={styles.bar}>
-          <IconButton label="Back" onPress={() => router.back()}>
+          <IconButton label={t('Back')} onPress={() => router.back()}>
             <Icon ios="chevron.left" android="arrow_back" />
           </IconButton>
           <ThemedView type="backgroundElement" style={styles.field}>
@@ -61,15 +71,15 @@ export default function SearchScreen() {
             <TextInput
               value={query}
               onChangeText={setQuery}
-              placeholder="Search notes, videos, filters, months…"
+              placeholder={t('Search notes, videos, filters, months…')}
               placeholderTextColor={theme.textSecondary}
               autoFocus
               returnKeyType="search"
-              accessibilityLabel="Search"
+              accessibilityLabel={t('Search')}
               style={[styles.input, { color: theme.text }, noFocusRing]}
             />
             {query.length > 0 && (
-              <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="Clear search">
+              <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel={t('Clear search')}>
                 <Icon ios="xmark.circle.fill" android="close" size={18} color={theme.textSecondary} />
               </Pressable>
             )}
@@ -78,10 +88,10 @@ export default function SearchScreen() {
 
         {query.trim() === '' ? (
           <ScrollView contentContainerStyle={styles.suggestions}>
-            <Group title="Try" items={SUGGESTIONS.filter((s) => counts[s] > 0)} counts={counts} onPick={choose} />
-            <Group title="Years" items={years} counts={counts} onPick={choose} />
+            <Group title={t('Try')} items={suggestions.filter((s) => counts[s.label] > 0)} counts={counts} onPick={choose} />
+            <Group title={t('Years')} items={years} counts={counts} onPick={choose} />
             <ThemedText type="small" themeColor="textSecondary" style={styles.privacy}>
-              🔒 Search runs entirely on this device.
+              {t('🔒 Search runs entirely on this device.')}
             </ThemedText>
           </ScrollView>
         ) : (
@@ -92,12 +102,12 @@ export default function SearchScreen() {
             edits={data.edits}
             header={
               <ThemedText type="small" themeColor="textSecondary" style={styles.count}>
-                {results.length} {results.length === 1 ? 'result' : 'results'}
+                {t.n(results.length, '{n} result', '{n} results')}
               </ThemedText>
             }
             empty={
               <ThemedText themeColor="textSecondary" style={styles.empty}>
-                Nothing matches “{query}”.
+                {t('Nothing matches “{query}”.', { query })}
               </ThemedText>
             }
           />
@@ -107,6 +117,8 @@ export default function SearchScreen() {
   );
 }
 
+type Chip = { label: string; query: string };
+
 function Group({
   title,
   items,
@@ -114,9 +126,9 @@ function Group({
   onPick,
 }: {
   title: string;
-  items: string[];
+  items: Chip[];
   counts: Record<string, number>;
-  onPick: (value: string) => void;
+  onPick: (chip: Chip) => void;
 }) {
   if (items.length === 0) return null;
   return (
@@ -124,11 +136,11 @@ function Group({
       <ThemedText type="smallBold">{title}</ThemedText>
       <View style={styles.chips}>
         {items.map((item) => (
-          <Pressable key={item} onPress={() => onPick(item)} style={({ pressed }) => pressed && styles.pressed}>
+          <Pressable key={item.label} onPress={() => onPick(item)} style={({ pressed }) => pressed && styles.pressed}>
             <ThemedView type="backgroundElement" style={styles.chip}>
-              <ThemedText type="small">{item}</ThemedText>
+              <ThemedText type="small">{item.label}</ThemedText>
               <ThemedText type="small" themeColor="textSecondary">
-                {counts[item]}
+                {counts[item.label]}
               </ThemedText>
             </ThemedView>
           </Pressable>
@@ -160,7 +172,7 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 22,
     paddingHorizontal: Spacing.three,
-    marginRight: Spacing.two,
+    marginEnd: Spacing.two,
   },
   input: {
     flex: 1,
@@ -168,6 +180,9 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   suggestions: {
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    alignSelf: 'center',
     padding: Spacing.three,
     gap: Spacing.four,
   },

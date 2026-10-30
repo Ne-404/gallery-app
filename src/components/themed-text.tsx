@@ -2,6 +2,7 @@ import { Platform, StyleSheet, Text, type TextProps } from 'react-native';
 
 import { Fonts, ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useLanguage } from '@/lib/i18n';
 
 export type ThemedTextProps = TextProps & {
   type?: 'default' | 'title' | 'small' | 'smallBold' | 'subtitle' | 'link' | 'linkPrimary' | 'code';
@@ -10,6 +11,7 @@ export type ThemedTextProps = TextProps & {
 
 export function ThemedText({ style, type = 'default', themeColor, ...rest }: ThemedTextProps) {
   const theme = useTheme();
+  const arabic = useLanguage() === 'ar';
 
   return (
     <Text
@@ -18,8 +20,9 @@ export function ThemedText({ style, type = 'default', themeColor, ...rest }: The
         styles[type],
         theme.brutal && (type === 'title' || type === 'subtitle' || type === 'smallBold') && styles.heavy,
         theme.serif && (type === 'title' || type === 'subtitle') && styles.serif,
-        theme.retro && type !== 'code' && styles.retro,
         style,
+        // Letter spacing pulls Arabic's joined letters apart.
+        arabic && styles.joined,
       ]}
       {...rest}
     />
@@ -65,13 +68,12 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.serif,
     letterSpacing: 0.5,
   },
-  retro: {
-    fontFamily: Fonts.retro,
-    letterSpacing: 0,
-  },
   heavy: {
     fontWeight: 800,
     letterSpacing: -0.3,
+  },
+  joined: {
+    letterSpacing: 0,
   },
   code: {
     fontFamily: Fonts.mono,

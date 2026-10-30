@@ -6,6 +6,8 @@ import { ThemedText } from '@/components/themed-text';
 import { Appearances, type Appearance } from '@/constants/theme';
 import { useAccent } from '@/hooks/use-gallery';
 import { useTheme } from '@/hooks/use-theme';
+import { dirProps, dirStyle } from '@/lib/direction';
+import { useT } from '@/lib/i18n';
 import { updateSettings, useUserData } from '@/lib/user-data';
 
 const RADIUS = 100;
@@ -25,6 +27,7 @@ type Host = RefObject<ComponentRef<typeof View> | null>;
  */
 export function useThemeWheel(host: Host) {
   const theme = useTheme();
+  const t = useT();
   const accent = useAccent();
   const appearance = useUserData().settings.appearance;
   const [open, setOpen] = useState(false);
@@ -92,7 +95,7 @@ export function useThemeWheel(host: Host) {
     <View
       accessible
       accessibilityRole="button"
-      accessibilityLabel={`Theme: ${current.label}. Press and hold to change`}
+      accessibilityLabel={t('Theme: {name}. Press and hold to change', { name: t(current.label) })}
       onStartShouldSetResponder={() => true}
       onMoveShouldSetResponder={() => true}
       onResponderTerminationRequest={() => false}
@@ -121,14 +124,15 @@ export function useThemeWheel(host: Host) {
   );
 
   const overlay = open ? (
-    <View style={StyleSheet.absoluteFill}>
-      <Pressable style={[StyleSheet.absoluteFill, styles.scrim]} onPress={close} accessibilityLabel="Close themes" />
+    // Positions come from measured screen coordinates, so the wheel is laid out left-to-right.
+    <View {...dirProps('ltr')} style={[StyleSheet.absoluteFill, dirStyle('ltr')]}>
+      <Pressable style={[StyleSheet.absoluteFill, styles.scrim]} onPress={close} accessibilityLabel={t('Close themes')} />
       <Animated.View
         pointerEvents="box-none"
         style={[styles.ring, { left: center.x - RADIUS - ITEM, top: center.y - RADIUS - ITEM }, ringStyle]}>
         <View style={[styles.hub, { backgroundColor: theme.backgroundElement, borderColor: accent }]}>
           <ThemedText type="smallBold" style={styles.hubText} numberOfLines={2}>
-            {focused.label}
+            {t(focused.label)}
           </ThemedText>
         </View>
         {Appearances.map((option, i) => {
@@ -137,7 +141,7 @@ export function useThemeWheel(host: Host) {
           return (
             <Pressable
               key={option.id}
-              accessibilityLabel={`${option.label} theme`}
+              accessibilityLabel={t('{name} theme', { name: t(option.label) })}
               onPress={() => choose(option.id)}
               style={[
                 styles.item,
@@ -156,7 +160,7 @@ export function useThemeWheel(host: Host) {
     </View>
   ) : null;
 
-  return { trigger: triggerElement, overlay, label: current.label };
+  return { trigger: triggerElement, overlay, label: t(current.label) };
 }
 
 function Swatch({ colors, size }: { colors: [string, string]; size: number }) {

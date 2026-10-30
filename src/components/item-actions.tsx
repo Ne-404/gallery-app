@@ -13,6 +13,7 @@ import { useGallery } from '@/hooks/use-gallery';
 import { useTheme } from '@/hooks/use-theme';
 import { formatDate, formatDuration } from '@/lib/dates';
 import { isEdited } from '@/lib/edits';
+import { useT, type TKey } from '@/lib/i18n';
 import { deleteFromDevice } from '@/lib/media';
 import { shareItem } from '@/lib/share';
 import { showToast } from '@/lib/toast';
@@ -56,6 +57,7 @@ export function ItemActions({
 }) {
   const { itemsById, data, isVaulted } = useGallery();
   const theme = useTheme();
+  const t = useT();
   const [mode, setMode] = useState<Mode>('menu');
   const item = itemId ? itemsById.get(itemId) : undefined;
 
@@ -73,7 +75,7 @@ export function ItemActions({
   const edit = data.edits[item.id];
 
   const actions: {
-    label: string;
+    label: TKey;
     icon: { ios: SFSymbol; android: AndroidSymbol };
     color?: string;
     onPress: () => void;
@@ -84,7 +86,7 @@ export function ItemActions({
           icon: { ios: 'arrow.uturn.backward', android: 'restore' },
           onPress: () => {
             restoreItems([item.id]);
-            showToast('Restored');
+            showToast(t('Restored'));
             close();
             onRemoved?.();
           },
@@ -94,7 +96,7 @@ export function ItemActions({
           icon: { ios: 'trash.slash', android: 'delete_forever' },
           color: '#E5484D',
           onPress: () =>
-            confirmAction('Delete forever?', 'This can’t be undone.', 'Delete', async () => {
+            confirmAction(t('Delete forever?'), t('This can’t be undone.'), t('Delete'), async () => {
               close();
               onRemoved?.();
               await deleteFromDevice([item.id]);
@@ -106,7 +108,7 @@ export function ItemActions({
         ...(onSelect
           ? [
               {
-                label: 'Select',
+                label: 'Select' as const,
                 icon: { ios: 'checkmark.circle', android: 'check_circle' } as const,
                 onPress: () => {
                   close();
@@ -118,7 +120,7 @@ export function ItemActions({
         ...(item.type === 'photo'
           ? [
               {
-                label: 'Edit',
+                label: 'Edit' as const,
                 icon: { ios: 'slider.horizontal.3', android: 'tune' } as const,
                 onPress: () => {
                   close();
@@ -142,7 +144,7 @@ export function ItemActions({
           icon: { ios: 'plus.square.on.square', android: 'content_copy' },
           onPress: () => {
             copyItem(item.id);
-            showToast('Copy made');
+            showToast(t('Copy made'));
             close();
           },
         },
@@ -157,11 +159,11 @@ export function ItemActions({
         ...(item.type === 'photo' && canSetWallpaper
           ? [
               {
-                label: 'Set as wallpaper',
+                label: 'Set as wallpaper' as const,
                 icon: { ios: 'photo.on.rectangle', android: 'wallpaper' } as const,
                 onPress: async () => {
                   close();
-                  if (!(await setAsWallpaper(item, edit))) showToast('Can’t set a wallpaper here');
+                  if (!(await setAsWallpaper(item, edit))) showToast(t('Can’t set a wallpaper here'));
                 },
               },
             ]
@@ -187,7 +189,7 @@ export function ItemActions({
             // Vault photos are deleted for good (like a phone's locked folder), so they never
             // appear in the public Recently deleted.
             if (isVaulted(item.id)) {
-              confirmAction('Delete from vault?', 'Vault photos are deleted permanently.', 'Delete', async () => {
+              confirmAction(t('Delete from vault?'), t('Vault photos are deleted permanently.'), t('Delete'), async () => {
                 close();
                 onRemoved?.();
                 await deleteFromDevice([item.id]);
@@ -196,29 +198,30 @@ export function ItemActions({
               return;
             }
             trashItems([item.id]);
-            showToast('Moved to Recently deleted', { label: 'Undo', onPress: () => restoreItems([item.id]) });
+            showToast(t('Moved to Recently deleted'), { label: t('Undo'), onPress: () => restoreItems([item.id]) });
             close();
             onRemoved?.();
           },
         },
       ];
 
+  const kind = t(KIND_LABELS[item.kind]);
   const details: [string, string][] = [
-    ['Name', title ?? KIND_LABELS[item.kind]],
-    ['Type', `${KIND_LABELS[item.kind]}${isCopy ? ' (copy)' : ''}`],
-    ['Size', `${item.width} × ${item.height}`],
-    ['Taken', formatDate(item.createdAt)],
-    ...(item.duration ? [['Length', formatDuration(item.duration)] as [string, string]] : []),
-    ['Edited', isEdited(edit) ? 'Yes (original kept)' : 'No'],
-    ['Favorite', liked ? 'Yes' : 'No'],
-    ['Stored', 'Only on this device'],
+    [t('Name'), title ?? kind],
+    [t('Type'), isCopy ? t('{kind} (copy)', { kind }) : kind],
+    [t('Size'), `${item.width} × ${item.height}`],
+    [t('Taken'), formatDate(item.createdAt, t)],
+    ...(item.duration ? [[t('Length'), formatDuration(item.duration)] as [string, string]] : []),
+    [t('Edited'), isEdited(edit) ? t('Yes (original kept)') : t('No')],
+    [t('Favorite'), liked ? t('Yes') : t('No')],
+    [t('Stored'), t('Only on this device')],
   ];
 
   return (
     <>
       <Sheet
         visible={mode === 'menu' || mode === 'details'}
-        title={mode === 'details' ? 'Details' : (title ?? KIND_LABELS[item.kind])}
+        title={mode === 'details' ? t('Details') : (title ?? kind)}
         onClose={close}>
         {mode === 'details' ? (
           <View style={styles.details}>
@@ -230,7 +233,7 @@ export function ItemActions({
             ))}
             <Pressable onPress={() => setMode('menu')} style={styles.back}>
               <ThemedText type="smallBold" themeColor="textSecondary">
-                Back
+                {t('Back')}
               </ThemedText>
             </Pressable>
           </View>
@@ -239,7 +242,7 @@ export function ItemActions({
             {actions.map((action) => (
               <Pressable
                 key={action.label}
-                accessibilityLabel={action.label}
+                accessibilityLabel={t(action.label)}
                 onPress={action.onPress}
                 style={({ pressed }) => [
                   styles.action,
@@ -249,7 +252,7 @@ export function ItemActions({
                 ]}>
                 <Icon {...action.icon} size={22} color={action.color} />
                 <ThemedText type="small" numberOfLines={2} style={[styles.actionLabel, action.color && { color: action.color }]}>
-                  {action.label}
+                  {t(action.label)}
                 </ThemedText>
               </Pressable>
             ))}
@@ -258,10 +261,10 @@ export function ItemActions({
       </Sheet>
       <TextPrompt
         visible={mode === 'rename'}
-        title="Rename"
-        placeholder="Give this a name"
+        title={t('Rename')}
+        placeholder={t('Give this a name')}
         initialValue={title}
-        submitLabel="Rename"
+        submitLabel={t('Rename')}
         onClose={close}
         onSubmit={(name) => {
           renameItem(item.id, name);
@@ -304,7 +307,6 @@ const styles = StyleSheet.create({
   },
   detailValue: {
     flexShrink: 1,
-    textAlign: 'right',
   },
   back: {
     alignSelf: 'center',

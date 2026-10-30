@@ -8,6 +8,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useAccent } from '@/hooks/use-gallery';
+import { useT } from '@/lib/i18n';
 import { showToast } from '@/lib/toast';
 import {
   addToCollection,
@@ -30,6 +31,7 @@ type MovePickerProps = {
 export function MovePicker({ itemIds, target, onClose, onDone }: MovePickerProps) {
   const { folders, collections } = useUserData();
   const accent = useAccent();
+  const t = useT();
   const [naming, setNaming] = useState(false);
   const options =
     target === 'folder'
@@ -41,8 +43,14 @@ export function MovePicker({ itemIds, target, onClose, onDone }: MovePickerProps
     if (!itemIds) return;
     if (target === 'folder') moveToFolder(id, itemIds);
     else addToCollection(id, itemIds);
-    const name = (target === 'folder' ? folders : collections).find((o) => o.id === id)?.name ?? (target === 'folder' ? 'folder' : 'the vault');
-    showToast(`Moved ${itemIds.length} to ${target === 'folder' ? name : 'the vault'}`);
+    const folder = target === 'folder' ? folders.find((o) => o.id === id)?.name : undefined;
+    showToast(
+      folder
+        ? t('Moved {n} to {name}', { n: itemIds.length, name: folder })
+        : target === 'folder'
+          ? t('Moved {n} to a folder', { n: itemIds.length })
+          : t('Moved {n} to the vault', { n: itemIds.length })
+    );
     onClose();
     onDone?.();
   };
@@ -51,26 +59,30 @@ export function MovePicker({ itemIds, target, onClose, onDone }: MovePickerProps
     <>
       <Sheet
         visible={itemIds !== null && !naming}
-        title={`Move ${count} ${count === 1 ? 'item' : 'items'} to ${target === 'folder' ? 'a folder' : 'the vault'}`}
+        title={
+          target === 'folder'
+            ? t.n(count, 'Move {n} item to a folder', 'Move {n} items to a folder')
+            : t.n(count, 'Move {n} item to the vault', 'Move {n} items to the vault')
+        }
         onClose={onClose}>
         <ScrollView contentContainerStyle={styles.list}>
           {target === 'vault' && (
             <ThemedText type="small" themeColor="textSecondary" style={styles.note}>
-              🔒 Vault photos are hidden from your gallery and open only with your passcode.
+              {t('🔒 Vault photos are hidden from your gallery and open only with your passcode.')}
             </ThemedText>
           )}
           <Pressable onPress={() => setNaming(true)} style={({ pressed }) => pressed && styles.pressed}>
             <ThemedView type="backgroundElement" style={styles.row}>
               <Icon ios="plus" android="add" color={accent} />
               <ThemedText style={{ color: accent }}>
-                {target === 'folder' ? 'New folder' : 'New vault album'}
+                {target === 'folder' ? t('New folder') : t('New vault album')}
               </ThemedText>
             </ThemedView>
           </Pressable>
           {options.map((option) => (
             <Pressable
               key={option.id}
-              accessibilityLabel={`Move to ${option.name}`}
+              accessibilityLabel={t('Move to {name}', { name: option.name })}
               onPress={() => move(option.id)}
               style={({ pressed }) => pressed && styles.pressed}>
               <ThemedView type="backgroundElement" style={styles.row}>
@@ -81,7 +93,7 @@ export function MovePicker({ itemIds, target, onClose, onDone }: MovePickerProps
                 <View style={styles.flex}>
                   <ThemedText>{option.name}</ThemedText>
                   <ThemedText type="small" themeColor="textSecondary">
-                    {option.count} items
+                    {t.n(option.count, '{n} item', '{n} items')}
                   </ThemedText>
                 </View>
               </ThemedView>
@@ -91,11 +103,17 @@ export function MovePicker({ itemIds, target, onClose, onDone }: MovePickerProps
       </Sheet>
       <TextPrompt
         visible={naming}
-        title={target === 'folder' ? 'New folder' : 'New vault album'}
-        placeholder="Name"
-        submitLabel="Create & move"
+        title={target === 'folder' ? t('New folder') : t('New vault album')}
+        placeholder={t('Name')}
+        submitLabel={t('Create & move')}
         onClose={() => setNaming(false)}
-        onSubmit={(name) => move(target === 'folder' ? createFolder(name) : createCollection(name))}
+        onSubmit={(name) =>
+          move(
+            target === 'folder'
+              ? createFolder(name.trim() || t('New folder'))
+              : createCollection(name.trim() || t('Untitled'))
+          )
+        }
       />
     </>
   );

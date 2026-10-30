@@ -9,19 +9,30 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useAccent, useGallery } from '@/hooks/use-gallery';
+import { useT } from '@/lib/i18n';
 import type { Reel } from '@/lib/reels';
 import { createCollection, toggleInCollection } from '@/lib/user-data';
+
+/** A reel counts as the current one once it fills most of the screen. */
+const VIEWABILITY = { itemVisiblePercentThreshold: 60 };
 
 /** Plays the user's stories full screen (opened from the Profile stories row). */
 export default function StoriesScreen() {
   const { reels, unlocked, data } = useGallery();
   const accent = useAccent();
+  const t = useT();
   const { reel: requestedReel } = useLocalSearchParams<{ reel?: string }>();
   const focused = useIsFocused();
   const insets = useSafeAreaInsets();
   const listRef = useRef<FlatList<Reel>>(null);
   const [height, setHeight] = useState(0);
   const [activeIndex, setActiveIndex] = useState(0);
+  // Follows whichever reel is on screen (a momentum-end event missed wheel scrolling on web
+  // and slow drags). FlatList requires this handler to never change, so it's created once.
+  const [onViewable] = useState(() => ({ viewableItems }: { viewableItems: { index?: number | null }[] }) => {
+    const page = viewableItems[0]?.index;
+    if (page != null) setActiveIndex(page);
+  });
   const [savedReels, setSavedReels] = useState<string[]>([]);
 
   // Jump to the reel tapped in the feed or opened from a notification.
@@ -31,9 +42,10 @@ export default function StoriesScreen() {
     setHandledRequest(requestedReel);
     setActiveIndex(requestedIndex);
   }
+  // Also re-run when the page height changes (the phone rotated), so the same reel stays on screen.
   useEffect(() => {
-    if (height && requestedIndex >= 0) {
-      listRef.current?.scrollToIndex({ index: requestedIndex, animated: false });
+    if (height && activeIndex < reels.length) {
+      listRef.current?.scrollToIndex({ index: activeIndex, animated: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestedReel, height]);
@@ -49,16 +61,16 @@ export default function StoriesScreen() {
     return (
       <ThemedView style={styles.empty}>
         <Icon ios="film.stack" android="movie" size={40} />
-        <ThemedText type="subtitle">No stories yet</ThemedText>
+        <ThemedText type="subtitle">{t('No stories yet')}</ThemedText>
         <ThemedText themeColor="textSecondary" style={styles.emptyText}>
-          Make a story from your photos and it plays here.
+          {t('Make a story from your photos and it plays here.')}
         </ThemedText>
         <Pressable
           onPress={() => router.push('/story')}
           style={({ pressed }) => [styles.saveButton, styles.createButton, { backgroundColor: accent }, pressed && styles.pressed]}>
           <Icon ios="plus" android="add" size={16} color="#fff" />
           <ThemedText type="smallBold" style={styles.saveText}>
-            New story
+            {t('New story')}
           </ThemedText>
         </Pressable>
       </ThemedView>
@@ -76,9 +88,13 @@ export default function StoriesScreen() {
           pagingEnabled
           showsVerticalScrollIndicator={false}
           getItemLayout={(_, index) => ({ length: height, offset: height * index, index })}
-          onMomentumScrollEnd={(e) =>
-            setActiveIndex(Math.round(e.nativeEvent.contentOffset.y / height))
-          }
+          // Each page is a full-screen story: keep only the neighbours mounted.
+          initialNumToRender={1}
+          maxToRenderPerBatch={2}
+          windowSize={3}
+          removeClippedSubviews
+          viewabilityConfig={VIEWABILITY}
+          onViewableItemsChanged={onViewable}
           renderItem={({ item: reel, index }) => (
             <ReelPlayer
               reel={reel}
@@ -95,7 +111,7 @@ export default function StoriesScreen() {
                   style={({ pressed }) => [styles.saveButton, pressed && styles.pressed]}>
                   <Icon ios="pencil" android="edit" size={16} color="#fff" />
                   <ThemedText type="smallBold" style={styles.saveText}>
-                    Edit story
+                    {t('Edit story')}
                   </ThemedText>
                 </Pressable>
                 <Pressable
@@ -109,7 +125,7 @@ export default function StoriesScreen() {
                     color="#fff"
                   />
                   <ThemedText type="smallBold" style={styles.saveText}>
-                    {savedReels.includes(reel.id) ? 'Moved to vault' : 'Save to vault'}
+                    {savedReels.includes(reel.id) ? t('Moved to vault') : t('Save to vault')}
                   </ThemedText>
                 </Pressable>
                 </View>
@@ -120,7 +136,7 @@ export default function StoriesScreen() {
       )}
       <Pressable
         onPress={() => (router.canGoBack() ? router.back() : router.replace('/profile'))}
-        accessibilityLabel="Close stories"
+        accessibilityLabel={t('Close stories')}
         hitSlop={12}
         style={[styles.close, { top: insets.top + Spacing.four }]}>
         <Icon ios="xmark" android="close" size={20} color="#fff" />
@@ -157,7 +173,7 @@ const styles = StyleSheet.create({
   },
   close: {
     position: 'absolute',
-    right: Spacing.three,
+    end: Spacing.three,
     width: 36,
     height: 36,
     borderRadius: 18,

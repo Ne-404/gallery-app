@@ -50,10 +50,8 @@ export default function RootLayout() {
           <Stack.Screen name="insights" />
           <Stack.Screen name="settings" />
           <Stack.Screen name="vault" />
-          <Stack.Screen name="pdfs" />
           <Stack.Screen name="notes" />
           <Stack.Screen name="note" />
-          <Stack.Screen name="pdf" />
           <Stack.Screen name="story" options={{ presentation: 'modal' }} />
           <Stack.Screen name="stories" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
           <Stack.Screen name="edit-profile" options={{ presentation: 'modal' }} />

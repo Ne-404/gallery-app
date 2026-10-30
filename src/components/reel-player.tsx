@@ -13,6 +13,7 @@ import { ThemedText } from '@/components/themed-text';
 import { VideoSurface } from '@/components/video-surface';
 import { Spacing } from '@/constants/theme';
 import { formatDate } from '@/lib/dates';
+import { useT } from '@/lib/i18n';
 import type { Reel } from '@/lib/reels';
 
 const PHOTO_MS = 3000;
@@ -40,6 +41,7 @@ export function ReelPlayer({
   hideDates,
   footer,
 }: ReelPlayerProps) {
+  const t = useT();
   const [rawIndex, setIndex] = useState(0);
   // The reel can shrink while playing (e.g. un-liking from Favorites).
   const index = rawIndex % reel.items.length;
@@ -77,7 +79,7 @@ export function ReelPlayer({
         <Animated.View style={[StyleSheet.absoluteFill, zoomStyle]}>
           <Image
             // Full-screen for a few seconds: the feed-sized preview is plenty and loads far faster.
-            source={{ uri: item.previewUri ?? item.uri }}
+            source={{ uri: item.uri }}
             placeholder={{ uri: item.thumbUri }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
@@ -115,8 +117,8 @@ export function ReelPlayer({
             {reel.title}
           </ThemedText>
           <ThemedText type="small" style={styles.light}>
-            {reel.subtitle}
-            {hideDates ? '' : ` · ${formatDate(item.createdAt)}`}
+            {t.n(reel.items.length, '{n} item', '{n} items')}
+            {hideDates ? '' : ` · ${formatDate(item.createdAt, t)}`}
           </ThemedText>
           {footer}
         </View>

@@ -1,19 +1,26 @@
-import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { memo } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { EditedImage } from '@/components/edited-image';
 import { Icon } from '@/components/icon';
+import { VideoSurface } from '@/components/video-surface';
 import { LikeColor, Spacing } from '@/constants/theme';
 import { formatDuration } from '@/lib/dates';
 import type { Edit } from '@/lib/edits';
 import type { MediaItem } from '@/lib/media';
 import type { Scope } from '@/lib/scopes';
 
+/** A mouse resting on a video tile this long plays a muted preview (desktop web). */
+const HOVER_PREVIEW_MS = 450;
+
 type MediaTileProps = {
   item: MediaItem;
   size: number;
+  /** Taller or shorter than square (masonry grids); square when omitted. */
+  height?: number;
+  /** Rounded corners (masonry grids). */
+  radius?: number;
   liked: boolean;
   edit?: Edit;
   /** Number of frames when this tile stands in for a whole burst. */
@@ -31,6 +38,8 @@ type MediaTileProps = {
 export const MediaTile = memo(function MediaTile({
   item,
   size,
+  height = size,
+  radius = 0,
   liked,
   edit,
   burstCount,
@@ -39,27 +48,47 @@ export const MediaTile = memo(function MediaTile({
   selected,
   onSelect,
 }: MediaTileProps) {
+  // The hovered item's id, not a flag: lists recycle tiles, so a stale flag could carry over.
+  const [previewing, setPreviewing] = useState<string | null>(null);
+  const hoverTimer = useRef(0);
+  useEffect(() => () => clearTimeout(hoverTimer.current), []);
+
   return (
     <Pressable
+      onHoverIn={
+        item.type === 'video'
+          ? () => {
+              clearTimeout(hoverTimer.current);
+              hoverTimer.current = Number(setTimeout(() => setPreviewing(item.id), HOVER_PREVIEW_MS));
+            }
+          : undefined
+      }
+      onHoverOut={() => {
+        clearTimeout(hoverTimer.current);
+        setPreviewing(null);
+      }}
       onPress={() =>
         selecting ? onSelect?.(item.id) : router.push({ pathname: '/viewer', params: { id: item.id, scope } })
       }
       onLongPress={onSelect ? () => onSelect(item.id) : undefined}
       delayLongPress={350}
       accessibilityState={selecting ? { selected } : undefined}
-      // Start fetching the full-size photo on touch, so the viewer opens on a loaded image.
-      onPressIn={() => item.type === 'photo' && Image.prefetch(item.uri, 'memory-disk')}
-      style={({ pressed }) => pressed && styles.pressed}>
+      style={({ pressed }) => [radius > 0 && { borderRadius: radius, overflow: 'hidden' }, pressed && styles.pressed]}>
       <EditedImage
-        // Demo thumbnails are square crops, so edited photos (which may be cropped or
+        // Thumbnails may be square crops, so edited photos (which may be cropped or
         // captioned) render from the full image to line up exactly.
         uri={edit && item.type === 'photo' ? item.uri : item.thumbUri}
         placeholderUri={edit ? item.thumbUri : undefined}
         sourceAspect={item.width / item.height}
         edit={edit}
-        style={{ width: size, height: size }}
+        style={{ width: size, height }}
         recyclingKey={item.id}
       />
+      {previewing === item.id && !selecting && (
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <VideoSurface item={item} contentFit="cover" muted loop />
+        </View>
+      )}
       <View style={styles.topRight}>
         {item.type === 'video' && <Icon ios="play.fill" android="play_arrow" size={16} color="#fff" />}
         {item.kind === 'live' && <Icon ios="livephoto" android="motion_photos_on" size={16} color="#fff" />}

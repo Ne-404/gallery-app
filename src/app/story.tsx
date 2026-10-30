@@ -12,9 +12,11 @@ import { Spacing } from '@/constants/theme';
 import { useAppWidth } from '@/hooks/use-app-width';
 import { useAccent, useGallery } from '@/hooks/use-gallery';
 import { useTheme } from '@/hooks/use-theme';
+import { useT } from '@/lib/i18n';
 import { confirmAction } from '@/lib/ui';
 import { createStory, deleteStory, updateStory } from '@/lib/user-data';
 
+/** Columns on a phone; tablets add more so tiles stay thumbnail-sized. */
 const COLUMNS = 4;
 const GAP = 2;
 
@@ -25,10 +27,12 @@ export default function StoryEditorScreen() {
   const accent = useAccent();
   const theme = useTheme();
   const width = useAppWidth();
+  const t = useT();
   const story = data.stories.find((s) => s.id === id);
   const [title, setTitle] = useState(story?.title ?? '');
   const [selected, setSelected] = useState<string[]>(story?.itemIds ?? []);
-  const tile = (width - GAP * (COLUMNS - 1)) / COLUMNS;
+  const columns = Math.max(COLUMNS, Math.round(width / 100));
+  const tile = (width - GAP * (columns - 1)) / columns;
 
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
   const toggle = (itemId: string) => {
@@ -38,7 +42,7 @@ export default function StoryEditorScreen() {
   const save = () => {
     if (!canSave) return;
     if (story) updateStory(story.id, { title: title.trim() || story.title, itemIds: selected });
-    else createStory(title, selected);
+    else createStory(title.trim() || t('Story'), selected);
     close();
   };
 
@@ -48,31 +52,31 @@ export default function StoryEditorScreen() {
         <TextInput
           value={title}
           onChangeText={setTitle}
-          placeholder="Story title"
+          placeholder={t('Story title')}
           placeholderTextColor={theme.textSecondary}
-          accessibilityLabel="Story title"
+          accessibilityLabel={t('Story title')}
           maxLength={40}
           style={[styles.input, { color: theme.text }, noFocusRing]}
         />
       </ThemedView>
       <ThemedText type="small" themeColor="textSecondary">
         {selected.length
-          ? `${selected.length} selected · they play in the order you tap them, and the first is the cover.`
-          : 'Tap photos and videos to add them to this story.'}
+          ? t('{n} selected · they play in the order you tap them, and the first is the cover.', { n: selected.length })
+          : t('Tap photos and videos to add them to this story.')}
       </ThemedText>
       {story && (
         <Pressable
           onPress={() =>
-            confirmAction(`Delete “${story.title}”?`, 'The photos themselves stay in your gallery.', 'Delete', () => {
+            confirmAction(t('Delete “{name}”?', { name: story.title }), t('The photos themselves stay in your gallery.'), t('Delete'), () => {
               deleteStory(story.id);
               close();
             })
           }
-          accessibilityLabel="Delete story"
+          accessibilityLabel={t('Delete story')}
           style={styles.delete}>
           <Icon ios="trash" android="delete" size={16} color="#E5484D" />
           <ThemedText type="smallBold" style={styles.deleteText}>
-            Delete story
+            {t('Delete story')}
           </ThemedText>
         </Pressable>
       )}
@@ -83,10 +87,10 @@ export default function StoryEditorScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <AppBar
-          title={story ? 'Edit story' : 'New story'}
+          title={story ? t('Edit story') : t('New story')}
           leading="close"
           actions={
-            <IconButton label="Save story" onPress={save}>
+            <IconButton label={t('Save story')} onPress={save}>
               <Icon ios="checkmark" android="check" color={canSave ? accent : theme.textSecondary} />
             </IconButton>
           }
@@ -94,7 +98,9 @@ export default function StoryEditorScreen() {
         <FlatList
           data={library.items}
           keyExtractor={(item) => item.id}
-          numColumns={COLUMNS}
+          // numColumns can't change on a mounted list.
+          key={columns}
+          numColumns={columns}
           columnWrapperStyle={styles.gridRow}
           ListHeaderComponent={header}
           extraData={selected}
@@ -106,7 +112,11 @@ export default function StoryEditorScreen() {
             return (
               <Pressable
                 onPress={() => toggle(item.id)}
-                accessibilityLabel={`${order >= 0 ? 'Remove' : 'Add'} ${item.type}`}
+                accessibilityLabel={
+                  item.type === 'video'
+                    ? order >= 0 ? t('Remove video') : t('Add video')
+                    : order >= 0 ? t('Remove photo') : t('Add photo')
+                }
                 style={{ width: tile, height: tile }}>
                 <Image source={{ uri: item.thumbUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
                 {order >= 0 && <View style={[StyleSheet.absoluteFill, styles.dim]} />}

@@ -9,6 +9,7 @@ import { ThemedView } from '@/components/themed-view';
 import { LikeColor, Spacing } from '@/constants/theme';
 import { useAccent, useGallery } from '@/hooks/use-gallery';
 import { useTheme } from '@/hooks/use-theme';
+import { useT, type TKey } from '@/lib/i18n';
 import { deleteFromDevice } from '@/lib/media';
 import type { Scope } from '@/lib/scopes';
 import { shareItems } from '@/lib/share';
@@ -31,6 +32,7 @@ export function SelectionBar({ selected, scope, allIds, onChange }: SelectionBar
   const { itemsById, data } = useGallery();
   const accent = useAccent();
   const theme = useTheme();
+  const t = useT();
   const [moving, setMoving] = useState<'folder' | 'vault' | null>(null);
   const count = selected.length;
   const allSelected = count === allIds.length && count > 0;
@@ -38,7 +40,7 @@ export function SelectionBar({ selected, scope, allIds, onChange }: SelectionBar
   const items = selected.flatMap((id) => itemsById.get(id) ?? []);
 
   const actions: {
-    label: string;
+    label: TKey;
     icon: { ios: SFSymbol; android: AndroidSymbol };
     color?: string;
     onPress: () => void;
@@ -50,7 +52,7 @@ export function SelectionBar({ selected, scope, allIds, onChange }: SelectionBar
             icon: { ios: 'arrow.uturn.backward', android: 'restore' },
             onPress: () => {
               restoreItems(selected);
-              showToast(`Restored ${count}`);
+              showToast(t('Restored {n}', { n: count }));
               done();
             },
           },
@@ -59,7 +61,7 @@ export function SelectionBar({ selected, scope, allIds, onChange }: SelectionBar
             icon: { ios: 'trash.slash', android: 'delete_forever' },
             color: '#E5484D',
             onPress: () =>
-              confirmAction(`Delete ${count} forever?`, 'This can’t be undone.', 'Delete', async () => {
+              confirmAction(t('Delete {n} forever?', { n: count }), t('This can’t be undone.'), t('Delete'), async () => {
                 done();
                 await deleteFromDevice(selected);
                 forgetItems(selected);
@@ -80,7 +82,7 @@ export function SelectionBar({ selected, scope, allIds, onChange }: SelectionBar
             color: LikeColor,
             onPress: () => {
               likeItems(selected);
-              showToast(`Added ${count} to favorites`);
+              showToast(t('Added {n} to favorites', { n: count }));
               done();
             },
           },
@@ -95,7 +97,7 @@ export function SelectionBar({ selected, scope, allIds, onChange }: SelectionBar
             icon: { ios: 'plus.square.on.square', android: 'content_copy' },
             onPress: () => {
               selected.forEach(copyItem);
-              showToast(count === 1 ? 'Copy made' : `${count} copies made`);
+              showToast(count === 1 ? t('Copy made') : t('{n} copies made', { n: count }));
               done();
             },
           },
@@ -105,7 +107,7 @@ export function SelectionBar({ selected, scope, allIds, onChange }: SelectionBar
             color: '#E5484D',
             onPress: () => {
               if (isVaultScope(scope)) {
-                confirmAction(`Delete ${count} from vault?`, 'Vault photos are deleted permanently.', 'Delete', async () => {
+                confirmAction(t('Delete {n} from vault?', { n: count }), t('Vault photos are deleted permanently.'), t('Delete'), async () => {
                   done();
                   await deleteFromDevice(selected);
                   forgetItems(selected);
@@ -114,7 +116,7 @@ export function SelectionBar({ selected, scope, allIds, onChange }: SelectionBar
               }
               trashItems(selected);
               const trashed = selected;
-              showToast(`${count} moved to Recently deleted`, { label: 'Undo', onPress: () => restoreItems(trashed) });
+              showToast(t('{n} moved to Recently deleted', { n: count }), { label: t('Undo'), onPress: () => restoreItems(trashed) });
               done();
             },
           },
@@ -123,20 +125,20 @@ export function SelectionBar({ selected, scope, allIds, onChange }: SelectionBar
   return (
     <ThemedView style={[styles.bar, { borderColor: theme.backgroundSelected }]}>
       <View style={styles.top}>
-        <Pressable onPress={done} hitSlop={8} accessibilityLabel="Cancel selection" style={styles.iconButton}>
+        <Pressable onPress={done} hitSlop={8} accessibilityLabel={t('Cancel selection')} style={styles.iconButton}>
           <Icon ios="xmark" android="close" />
         </Pressable>
         <ThemedText type="smallBold" style={styles.count}>
-          {count === 0 ? 'Select items' : `${count} selected`}
+          {count === 0 ? t('Select items') : t('{n} selected', { n: count })}
         </ThemedText>
         <Pressable
           onPress={() => {
             onChange(allSelected ? [] : allIds);
           }}
-          accessibilityLabel={allSelected ? 'Deselect all' : 'Select all'}
+          accessibilityLabel={allSelected ? t('Deselect all') : t('Select all')}
           hitSlop={8}>
           <ThemedText type="smallBold" style={{ color: accent }}>
-            {allSelected ? 'Deselect all' : 'Select all'}
+            {allSelected ? t('Deselect all') : t('Select all')}
           </ThemedText>
         </Pressable>
       </View>
@@ -145,12 +147,12 @@ export function SelectionBar({ selected, scope, allIds, onChange }: SelectionBar
           <Pressable
             key={action.label}
             disabled={count === 0}
-            accessibilityLabel={action.label}
+            accessibilityLabel={t(action.label)}
             onPress={action.onPress}
             style={({ pressed }) => [styles.action, (pressed || count === 0) && styles.dim]}>
             <Icon {...action.icon} size={22} color={action.color} />
             <ThemedText type="small" style={[styles.actionLabel, action.color && { color: action.color }]}>
-              {action.label}
+              {t(action.label)}
             </ThemedText>
           </Pressable>
         ))}

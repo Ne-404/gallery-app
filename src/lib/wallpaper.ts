@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 
 import { isEdited, type Edit } from '@/lib/edits';
 import { renderEdited } from '@/lib/export';
+import { t } from '@/lib/i18n';
 import type { MediaItem } from '@/lib/media';
 import { localFile } from '@/lib/share';
 
@@ -36,6 +37,6 @@ export async function setAsWallpaper(item: MediaItem, edit?: Edit) {
     }
   }
   if (!(await Sharing.isAvailableAsync())) return false;
-  await Sharing.shareAsync(uri, { dialogTitle: 'Set as wallpaper', mimeType: 'image/jpeg', UTI: 'public.jpeg' });
+  await Sharing.shareAsync(uri, { dialogTitle: t('Set as wallpaper'), mimeType: 'image/jpeg', UTI: 'public.jpeg' });
   return true;
 }

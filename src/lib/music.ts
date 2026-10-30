@@ -3,18 +3,17 @@ import { Platform } from 'react-native';
 
 import { createStore } from '@/lib/create-store';
 import { AUDIO_FILES, canScanDevice, listFolder, pickFolder, scanAudioLibrary } from '@/lib/device-files';
+import { translator, type Translator } from '@/lib/i18n';
 import { deleteStored, pickAndStore, storedUrl } from '@/lib/local-files';
 import { addTracks, removeTrack, updateSettings, userData, type Track } from '@/lib/user-data';
 
-/** Sample songs so the player works before anything is imported (streamed, not stored). */
-export const SAMPLE_TRACKS: Track[] = [1, 2, 3].map((n) => ({
-  id: `sample-${n}`,
-  title: `Sample song ${n}`,
-  artist: 'SoundHelix',
-  uri: `https://www.soundhelix.com/examples/mp3/SoundHelix-Song-${n}.mp3`,
-  size: 0,
-  addedAt: 0,
-}));
+/** Built-in artist labels are stored in English and translated when shown. */
+export function trackLabels(track: Track, t: Translator = translator()) {
+  return {
+    title: track.title,
+    artist: track.artist === 'On this device' || track.artist === 'My music' ? t(track.artist) : track.artist,
+  };
+}
 
 /** Songs found on the device (media library or the chosen folder); re-scanned on open. */
 const detected = createStore<{ tracks: Track[]; scanning: boolean }>({ tracks: [], scanning: false });
@@ -40,7 +39,7 @@ export async function chooseMusicFolder() {
   await scanDeviceMusic();
 }
 
-export const allTracks = () => [...userData.get().tracks, ...detected.get().tracks, ...SAMPLE_TRACKS];
+export const allTracks = () => [...userData.get().tracks, ...detected.get().tracks];
 
 type MusicState = {
   currentId: string | null;
@@ -50,6 +49,8 @@ type MusicState = {
   duration: number;
   shuffle: boolean;
   repeat: boolean;
+  /** 0–1. */
+  volume: number;
 };
 
 const music = createStore<MusicState>({
@@ -60,6 +61,7 @@ const music = createStore<MusicState>({
   duration: 0,
   shuffle: false,
   repeat: false,
+  volume: 1,
 });
 
 export const useMusic = music.use;
@@ -74,6 +76,7 @@ function getPlayer() {
     () => {}
   );
   player = createAudioPlayer(null, { updateInterval: 500 });
+  player.volume = music.get().volume;
   player.addListener('playbackStatusUpdate', (status) => {
     if (status.didJustFinish) {
       if (music.get().repeat) {
@@ -117,7 +120,8 @@ export async function playTrack(track: Track) {
  */
 function showNowPlaying(p: AudioPlayer, track: Track) {
   if (Platform.OS === 'web' || typeof p.setActiveForLockScreen !== 'function') return;
-  const metadata = { title: track.title, artist: track.artist, albumTitle: 'Gallery' };
+  const t = translator();
+  const metadata = { ...trackLabels(track, t), albumTitle: t('Gally-ri') };
   try {
     if (lockScreenActive) p.updateLockScreenMetadata(metadata);
     else p.setActiveForLockScreen(true, metadata, { showSeekBackward: true, showSeekForward: true });
@@ -170,6 +174,12 @@ export function previous() {
 export function seek(seconds: number) {
   getPlayer().seekTo(seconds);
   music.set((s) => ({ ...s, position: seconds }));
+}
+
+export function setVolume(volume: number) {
+  const v = Math.max(0, Math.min(1, volume));
+  getPlayer().volume = v;
+  music.set((s) => ({ ...s, volume: v }));
 }
 
 export const toggleShuffle = () => music.set((s) => ({ ...s, shuffle: !s.shuffle }));

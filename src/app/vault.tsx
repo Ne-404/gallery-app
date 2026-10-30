@@ -15,6 +15,7 @@ import { Spacing } from '@/constants/theme';
 import { useAccent, useGallery } from '@/hooks/use-gallery';
 import { useTheme } from '@/hooks/use-theme';
 import { biometricsAvailable, confirmOwner } from '@/lib/biometrics';
+import { useT, type Translator } from '@/lib/i18n';
 import { buildAlbums, type Album } from '@/lib/scopes';
 import { confirmAction } from '@/lib/ui';
 import {
@@ -28,8 +29,8 @@ import { lockVault, openVault, unlockVault, useVaultUnlocked } from '@/lib/vault
 
 type Stage = 'enter' | 'create' | 'confirm';
 
-const formatWait = (seconds: number) =>
-  seconds >= 60 ? `${Math.ceil(seconds / 60)} min` : `${seconds} s`;
+const formatWait = (seconds: number, t: Translator) =>
+  seconds >= 60 ? t('{n} min', { n: Math.ceil(seconds / 60) }) : t('{n} s', { n: seconds });
 
 /**
  * Everything you save lives here, behind a passcode you set the first time you open it.
@@ -39,6 +40,7 @@ export default function VaultScreen() {
   const { data, scoped } = useGallery();
   const accent = useAccent();
   const theme = useTheme();
+  const t = useT();
   const unlocked = useVaultUnlocked();
   const [stage, setStage] = useState<Stage>(data.vault ? 'enter' : 'create');
   const [firstEntry, setFirstEntry] = useState('');
@@ -64,8 +66,8 @@ export default function VaultScreen() {
     if (stage === 'enter') {
       const result = unlockVault(passcode);
       if (result === 'ok') setError('');
-      else if (result === 'locked') fail(`Too many tries. Wait ${formatWait(vaultLockoutSeconds())} and try again.`);
-      else fail('Wrong passcode. Try again.');
+      else if (result === 'locked') fail(t('Too many tries. Wait {time} and try again.', { time: formatWait(vaultLockoutSeconds(), t) }));
+      else fail(t('Wrong passcode. Try again.'));
       return;
     }
     if (stage === 'create') {
@@ -76,7 +78,7 @@ export default function VaultScreen() {
     }
     if (passcode !== firstEntry) {
       setStage('create');
-      fail('Passcodes didn’t match. Start over.');
+      fail(t('Passcodes didn’t match. Start over.'));
       return;
     }
     setVaultPasscode(passcode);
@@ -88,9 +90,9 @@ export default function VaultScreen() {
 
   const resetEverything = () =>
     confirmAction(
-      'Reset the vault?',
-      'The passcode is removed and everything in the vault is removed from Gallery. Photos stay in your device’s photo library.',
-      'Reset',
+      t('Reset the vault?'),
+      t('The passcode is removed and everything in the vault is removed from Gally-ri. Photos stay in your device’s photo library.'),
+      t('Reset'),
       () => {
         resetVault();
         setError('');
@@ -105,18 +107,18 @@ export default function VaultScreen() {
       resetEverything();
       return;
     }
-    if (await confirmOwner('Confirm it’s you to reset your vault passcode')) {
+    if (await confirmOwner(t('Confirm it’s you to reset your vault passcode'))) {
       openVault();
       setChanging(true);
       setStage('create');
       setError('');
     } else {
-      fail('Fingerprint not recognized.');
+      fail(t('Fingerprint not recognized.'));
     }
   };
 
   const unlockWithBiometrics = async () => {
-    if (await confirmOwner('Unlock your vault')) {
+    if (await confirmOwner(t('Unlock your vault'))) {
       openVault();
     }
   };
@@ -131,7 +133,7 @@ export default function VaultScreen() {
             leading="back"
             actions={
               changing ? (
-                <IconButton label="Cancel" onPress={() => setChanging(false)}>
+                <IconButton label={t('Cancel')} onPress={() => setChanging(false)}>
                   <Icon ios="xmark" android="close" />
                 </IconButton>
               ) : null
@@ -142,17 +144,17 @@ export default function VaultScreen() {
               key={stage}
               title={
                 stage === 'enter'
-                  ? 'Enter vault passcode'
+                  ? t('Enter vault passcode')
                   : stage === 'create'
                     ? changing
-                      ? 'Choose a new passcode'
-                      : 'Create a vault passcode'
-                    : 'Confirm your passcode'
+                      ? t('Choose a new passcode')
+                      : t('Create a vault passcode')
+                    : t('Confirm your passcode')
               }
               subtitle={
                 creating
-                  ? 'Saved photos are hidden everywhere else and only open with this code.'
-                  : 'Your saved photos are locked.'
+                  ? t('Saved photos are hidden everywhere else and only open with this code.')
+                  : t('Your saved photos are locked.')
               }
               error={error}
               attempt={attempt}
@@ -163,14 +165,14 @@ export default function VaultScreen() {
                 {hasBiometrics && (
                   <Pressable
                     onPress={unlockWithBiometrics}
-                    accessibilityLabel="Unlock with fingerprint"
+                    accessibilityLabel={t('Unlock with fingerprint')}
                     style={[styles.biometric, { borderColor: accent }]}>
                     <Icon ios="touchid" android="fingerprint" size={28} color={accent} />
                   </Pressable>
                 )}
                 <Pressable onPress={forgot} hitSlop={8}>
                   <ThemedText type="smallBold" style={{ color: accent }}>
-                    {hasBiometrics ? 'Forgot passcode? Use fingerprint' : 'Forgot passcode?'}
+                    {hasBiometrics ? t('Forgot passcode? Use fingerprint') : t('Forgot passcode?')}
                   </ThemedText>
                 </Pressable>
               </View>
@@ -181,7 +183,7 @@ export default function VaultScreen() {
     );
   }
 
-  const albums = buildAlbums([], data).collections.map((a) => ({
+  const albums = buildAlbums([], data, t).collections.map((a) => ({
     ...a,
     items: scoped(a.scope),
   }));
@@ -189,7 +191,7 @@ export default function VaultScreen() {
 
   const open = (album: Album) => router.push({ pathname: '/album', params: { scope: album.scope } });
   const confirmDelete = (album: Album) =>
-    confirmAction(`Delete “${album.title}”?`, 'Its photos leave the vault and return to your library.', 'Delete', () =>
+    confirmAction(t('Delete “{name}”?', { name: album.title }), t('Its photos leave the vault and return to your library.'), t('Delete'), () =>
       deleteCollection(album.scope.replace('collection:', ''))
     );
 
@@ -197,15 +199,15 @@ export default function VaultScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <AppBar
-          title="Vault"
+          title={t('Vault')}
           leading="back"
           actions={
             <>
-              <IconButton label="New album" onPress={() => setNaming(true)}>
+              <IconButton label={t('New album')} onPress={() => setNaming(true)}>
                 <Icon ios="plus" android="add" />
               </IconButton>
               <IconButton
-                label="Change passcode"
+                label={t('Change passcode')}
                 onPress={() => {
                   setStage('create');
                   setChanging(true);
@@ -213,7 +215,7 @@ export default function VaultScreen() {
                 <Icon ios="key" android="key" />
               </IconButton>
               <IconButton
-                label="Lock vault"
+                label={t('Lock vault')}
                 onPress={() => {
                   lockVault();
                   if (router.canGoBack()) router.back();
@@ -233,7 +235,7 @@ export default function VaultScreen() {
               <View style={[styles.banner, { backgroundColor: `${accent}1F` }]}>
                 <Icon ios="lock.open.fill" android="lock_open" size={18} color={accent} />
                 <ThemedText type="small" style={styles.flex}>
-                  Unlocked. The vault locks again when you leave it or close the app.
+                  {t('Unlocked. The vault locks again when you leave it or close the app.')}
                 </ThemedText>
               </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.albums}>
@@ -241,7 +243,7 @@ export default function VaultScreen() {
                   <View style={[styles.newAlbum, { borderColor: theme.backgroundSelected }]}>
                     <Icon ios="plus" android="add" size={28} color={accent} />
                     <ThemedText type="smallBold" style={{ color: accent }}>
-                      New album
+                      {t('New album')}
                     </ThemedText>
                   </View>
                 </Pressable>
@@ -256,13 +258,13 @@ export default function VaultScreen() {
                 ))}
               </ScrollView>
               <ThemedText type="smallBold" style={styles.sectionTitle}>
-                All saved · {saved.length}
+                {t('All saved')} · {saved.length}
               </ThemedText>
             </View>
           }
           empty={
             <ThemedText themeColor="textSecondary" style={styles.empty}>
-              Nothing saved yet. Tap the bookmark on any photo to move it into the vault.
+              {t('Nothing saved yet. Tap the bookmark on any photo to move it into the vault.')}
             </ThemedText>
           }
         />
@@ -270,12 +272,12 @@ export default function VaultScreen() {
 
       <TextPrompt
         visible={naming}
-        title="New vault album"
-        placeholder="e.g. Private trip"
-        submitLabel="Create"
+        title={t('New vault album')}
+        placeholder={t('e.g. Private trip')}
+        submitLabel={t('Create')}
         onClose={() => setNaming(false)}
         onSubmit={(name) => {
-          createCollection(name);
+          createCollection(name.trim() || t('Untitled'));
         }}
       />
     </ThemedView>

@@ -7,6 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useAccent } from '@/hooks/use-gallery';
 import { useTheme } from '@/hooks/use-theme';
+import { useT } from '@/lib/i18n';
 
 type TextPromptProps = {
   visible: boolean;
@@ -38,6 +39,7 @@ function PromptBody({
   onClose,
 }: Omit<TextPromptProps, 'visible' | 'title'>) {
   const theme = useTheme();
+  const t = useT();
   const accent = useAccent();
   const [value, setValue] = useState(initialValue);
   // Allow confirming an empty field only when it clears an existing value (deletes a note).
@@ -86,7 +88,7 @@ function PromptBody({
       <View style={styles.footer}>
         <Pressable onPress={onClose} hitSlop={8} style={({ pressed }) => pressed && styles.pressed}>
           <ThemedText type="smallBold" themeColor="textSecondary">
-            Cancel
+            {t('Cancel')}
           </ThemedText>
         </Pressable>
         <Pressable

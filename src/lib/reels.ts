@@ -1,3 +1,4 @@
+import { t } from '@/lib/i18n';
 import type { MediaItem } from '@/lib/media';
 import type { Story } from '@/lib/user-data';
 
@@ -5,7 +6,6 @@ import type { Story } from '@/lib/user-data';
 export type Reel = {
   id: string;
   title: string;
-  subtitle: string;
   items: MediaItem[];
 };
 
@@ -21,18 +21,17 @@ export function buildReels(stories: Story[], itemsById: Map<string, MediaItem>) 
       {
         id: story.id,
         title: story.title,
-        subtitle: `${items.length} ${items.length === 1 ? 'item' : 'items'}`,
         items,
       },
     ];
   });
 }
 
-/** The starter stories created once, the first time the library loads. */
+/** The starter stories created once, the first time the library loads (named in the app language). */
 export function starterStories(items: MediaItem[]) {
   const ids = (list: MediaItem[], max: number) => list.slice(0, max).map((i) => i.id);
   return [
-    { title: 'Highlights', itemIds: ids(items.filter((i) => i.type === 'photo' && !i.burstId), 8) },
-    { title: 'In motion', itemIds: ids(items.filter((i) => i.kind === 'video' || i.kind === 'live'), 10) },
+    { title: t('Highlights|story'), itemIds: ids(items.filter((i) => i.type === 'photo' && !i.burstId), 8) },
+    { title: t('In motion'), itemIds: ids(items.filter((i) => i.kind === 'video' || i.kind === 'live'), 10) },
   ];
 }

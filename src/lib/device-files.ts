@@ -55,4 +55,3 @@ export function listFolder(folderUri: string, pattern: RegExp, depth = 3): Devic
 }
 
 export const AUDIO_FILES = AUDIO;
-export const PDF_FILES = /\.pdf$/i;

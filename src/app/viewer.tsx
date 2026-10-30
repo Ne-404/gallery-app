@@ -1,5 +1,4 @@
-import { Image } from 'expo-image';
-import { Redirect, router, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useLocalSearchParams, type ErrorBoundaryProps } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import Animated, {
@@ -24,15 +23,19 @@ import { LikeColor, Spacing } from '@/constants/theme';
 import { useAppWidth } from '@/hooks/use-app-width';
 import { useGallery } from '@/hooks/use-gallery';
 import { formatDate } from '@/lib/dates';
-import { openInPlayer } from '@/lib/external-player';
+import { dirProps, dirStyle } from '@/lib/direction';
+import { useT, type TKey } from '@/lib/i18n';
 import type { MediaItem, MediaKind } from '@/lib/media';
 import type { Scope } from '@/lib/scopes';
-import { renameItem, setNote, toggleLike } from '@/lib/user-data';
+import { showToast } from '@/lib/toast';
+import { renameItem, setNote, toggleLike, updateSettings } from '@/lib/user-data';
 import { isVaultScope, useVaultUnlocked } from '@/lib/vault';
 
 const SLIDESHOW_MS = 3000;
+/** A page counts as the current one once it fills most of the screen. */
+const VIEWABILITY = { itemVisiblePercentThreshold: 60 };
 
-const KIND_LABELS: Record<MediaKind, string> = {
+const KIND_LABELS: Record<MediaKind, TKey> = {
   single: 'Photo',
   burst: 'Burst',
   live: 'Live Photo',
@@ -44,6 +47,7 @@ export default function ViewerScreen() {
   const { id, scope = 'all' } = useLocalSearchParams<{ id: string; scope?: Scope }>();
   const { library, data, scoped } = useGallery();
   const unlocked = useVaultUnlocked();
+  const t = useT();
   const width = useAppWidth();
   // Pages need an explicit height: a horizontal list doesn't stretch its children on web,
   // which left every photo in a zero-height box (a black screen).
@@ -70,15 +74,27 @@ export default function ViewerScreen() {
   const [chrome, setChrome] = useState(true);
   const [slideshow, setSlideshow] = useState(false);
   const list = useRef<FlatList<MediaItem>>(null);
+  // FlatList requires this handler to never change, so it's created once.
+  const [onViewable] = useState(() => ({ viewableItems }: { viewableItems: { index?: number | null }[] }) => {
+    const page = viewableItems[0]?.index;
+    if (page != null) setIndex(page);
+  });
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
 
-  // Slideshow: advance every few seconds; any touch (or the last photo) stops it.
+  // Pages are one screen wide: after the phone rotates, stay on the same photo.
+  useEffect(() => {
+    if (items.length > 0) list.current?.scrollToIndex({ index: Math.min(index, items.length - 1), animated: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [width]);
+
+  // Slideshow: advance every few seconds through the photos (videos are skipped); any touch
+  // (or the last photo) stops it.
   useEffect(() => {
     if (!slideshow) return;
     const timer = setInterval(() => {
       setIndex((i) => {
-        const next = i + 1;
-        if (next >= items.length) {
+        const next = (snapshot ?? []).findIndex((item, j) => j > i && item.type === 'photo');
+        if (next < 0) {
           setSlideshow(false);
           return i;
         }
@@ -87,14 +103,7 @@ export default function ViewerScreen() {
       });
     }, SLIDESHOW_MS);
     return () => clearInterval(timer);
-  }, [slideshow, items.length]);
-
-  // The list already renders the neighbours; warm the cache one further each way, so quick
-  // swipes land on a loaded photo too.
-  useEffect(() => {
-    const ahead = [snapshot?.[index + 2], snapshot?.[index - 2]].filter((i) => i?.type === 'photo');
-    if (ahead.length) Image.prefetch(ahead.map((i) => i!.uri), 'memory-disk');
-  }, [snapshot, index]);
+  }, [slideshow, snapshot]);
 
   // Swipe down to close (when not zoomed): the photo follows the finger, then closes.
   const dragY = useSharedValue(0);
@@ -118,11 +127,12 @@ export default function ViewerScreen() {
   }));
   const heart = useSharedValue(0);
   const heartStyle = useAnimatedStyle(() => ({
-    opacity: heart.value,
-    transform: [{ scale: 0.6 + heart.value * 0.6 }],
+    opacity: heart.get(),
+    transform: [{ scale: 0.6 + heart.get() * 0.6 }],
   }));
 
-  const current: MediaItem | undefined = items[index];
+  // Clamped: the list can shrink under the index (an item deleted or moved to the vault).
+  const current: MediaItem | undefined = items[Math.min(index, items.length - 1)];
   if (isVaultScope(scope) && !unlocked) return <Redirect href="/vault" />;
   // Both branches measure: react-native-web only hooks up `onLayout` when a view mounts, and
   // this view is reused once the library finishes loading.
@@ -149,8 +159,9 @@ export default function ViewerScreen() {
 
   return (
     <View style={styles.container} onLayout={measure}>
+      {/* Paging math uses x offsets, so the pager stays left-to-right in Arabic too. */}
       <GestureDetector gesture={dismiss}>
-      <Animated.View style={[styles.fill, dragStyle]}>
+      <Animated.View {...dirProps('ltr')} style={[styles.fill, dirStyle('ltr'), dragStyle]}>
       <FlatList
         ref={list}
         data={items}
@@ -165,21 +176,30 @@ export default function ViewerScreen() {
         showsHorizontalScrollIndicator={false}
         initialScrollIndex={index}
         getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
-        onMomentumScrollEnd={(e) => setIndex(Math.round(e.nativeEvent.contentOffset.x / width))}
+        // Follows whichever page is on screen. A momentum-end event alone missed wheel and
+        // trackpad scrolling on web and slow drags without a fling.
+        viewabilityConfig={VIEWABILITY}
+        onViewableItemsChanged={onViewable}
         windowSize={3}
         initialNumToRender={1}
         maxToRenderPerBatch={2}
         renderItem={({ item, index: i }) => (
           <View style={{ width, height: pageHeight }}>
-            {item.type === 'video' && data.settings.videoPlayer === 'external' ? (
-              <ExternalVideo item={item} />
-            ) : item.type === 'video' && i === index ? (
+            {item.type === 'video' && i === index ? (
               <VideoSurface
                 item={item}
                 contentFit="contain"
-                nativeControls
-                minimal={data.settings.videoPlayer === 'minimal'}
-                loop
+                controls
+                chrome={chrome}
+                onChromeChange={setChrome}
+                background={data.settings.videoBackground}
+                onBackgroundChange={(on) => {
+                  updateSettings({ videoBackground: on });
+                  showToast(on ? t('Keeps playing in the background') : t('Pauses in the background'));
+                }}
+                loop={data.settings.videoLoop}
+                onLoopChange={(on) => updateSettings({ videoLoop: on })}
+                onClose={close}
               />
             ) : (
               <Zoomable
@@ -193,7 +213,7 @@ export default function ViewerScreen() {
                 <EditedImage
                   uri={item.uri}
                   // The feed's preview is usually cached already: a sharp stand-in while loading.
-                  placeholderUri={item.previewUri ?? item.thumbUri}
+                  placeholderUri={item.thumbUri}
                   edit={data.edits[item.id]}
                   sourceAspect={item.width / item.height}
                   style={styles.fill}
@@ -218,41 +238,49 @@ export default function ViewerScreen() {
         style={[styles.topBar, (!chrome || slideshow) && styles.hidden]}
         edges={['top']}
         pointerEvents={chrome && !slideshow ? 'box-none' : 'none'}>
-        <CloseButton />
+        <View style={styles.topSide}>
+          <CloseButton />
+        </View>
         {/* Tap the title to name the photo: with dates hidden, a name is the only label it has. */}
         <Pressable
           onPress={() => setRenaming(true)}
-          accessibilityLabel="Rename"
+          accessibilityLabel={t('Rename')}
           style={({ pressed }) => [styles.titleBlock, pressed && styles.pressed]}>
           <Text style={styles.title} numberOfLines={1}>
             {data.titles[current.id] ??
-              (data.settings.hideDates ? KIND_LABELS[current.kind] : formatDate(current.createdAt))}
+              (data.settings.hideDates ? t(KIND_LABELS[current.kind]) : formatDate(current.createdAt, t))}
           </Text>
           <Text style={styles.subtitle}>
-            {data.settings.hideDates ? '' : `${KIND_LABELS[current.kind]} · `}
-            {index + 1} of {items.length}
-            {!data.titles[current.id] && ' · Tap to name'}
+            {data.settings.hideDates ? '' : `${t(KIND_LABELS[current.kind])} · `}
+            {t('{n} of {total}', { n: index + 1, total: items.length })}
+            {!data.titles[current.id] && ` · ${t('Tap to name')}`}
           </Text>
         </Pressable>
-        <Pressable
-          onPress={() => {
-            setSlideshow(true);
-            setChrome(true);
-          }}
-          accessibilityLabel="Slideshow"
-          hitSlop={Spacing.two}
-          style={({ pressed }) => [styles.iconButton, styles.closeButton, styles.slideshowButton, pressed && styles.pressed]}>
-          <Icon ios="play.fill" android="slideshow" size={16} color="#fff" />
-        </Pressable>
-        <Pressable
-          onPress={() => setMenuItem(current.id)}
-          accessibilityLabel="More options"
-          hitSlop={Spacing.three}
-          style={({ pressed }) => [styles.iconButton, styles.closeButton, pressed && styles.pressed]}>
-          <Icon ios="ellipsis" android="more_vert" size={18} color="#fff" />
-        </Pressable>
+        <View style={styles.topActions}>
+          {current.type === 'photo' && (
+            <Pressable
+              onPress={() => {
+                setSlideshow(true);
+                setChrome(true);
+              }}
+              accessibilityLabel={t('Slideshow')}
+              hitSlop={Spacing.two}
+              style={({ pressed }) => [styles.iconButton, styles.closeButton, pressed && styles.pressed]}>
+              <Icon ios="play.fill" android="slideshow" size={16} color="#fff" />
+            </Pressable>
+          )}
+          <Pressable
+            onPress={() => setMenuItem(current.id)}
+            accessibilityLabel={t('More options')}
+            hitSlop={Spacing.two}
+            style={({ pressed }) => [styles.iconButton, styles.closeButton, pressed && styles.pressed]}>
+            <Icon ios="ellipsis" android="more_vert" size={18} color="#fff" />
+          </Pressable>
+        </View>
       </SafeAreaView>
 
+      {/* Videos bring their own controls; like, note and save are for photos. */}
+      {current.type === 'photo' && (
       <SafeAreaView
         style={[styles.bottomBar, (!chrome || slideshow) && styles.hidden]}
         edges={['bottom']}
@@ -265,7 +293,7 @@ export default function ViewerScreen() {
           </Pressable>
         )}
         <View style={styles.actions}>
-          <ActionButton onPress={like} label={liked ? 'Liked' : 'Like'}>
+          <ActionButton onPress={like} label={liked ? t('Liked') : t('Like')}>
             <Icon
               ios={liked ? 'heart.fill' : 'heart'}
               android={liked ? 'favorite' : 'favorite_border'}
@@ -273,7 +301,7 @@ export default function ViewerScreen() {
               color={liked ? LikeColor : '#fff'}
             />
           </ActionButton>
-          <ActionButton onPress={() => setEditingNote(true)} label={note ? 'Edit note' : 'Note'}>
+          <ActionButton onPress={() => setEditingNote(true)} label={note ? t('Edit note') : t('Note')}>
             <Icon
               ios={note ? 'text.bubble.fill' : 'text.bubble'}
               android="chat_bubble"
@@ -284,11 +312,11 @@ export default function ViewerScreen() {
           {current.type === 'photo' && (
             <ActionButton
               onPress={() => router.push({ pathname: '/editor', params: { id: current.id } })}
-              label="Edit">
+              label={t('Edit')}>
               <Icon ios="slider.horizontal.3" android="tune" size={24} color="#fff" />
             </ActionButton>
           )}
-          <ActionButton onPress={() => setPickerItem(current.id)} label={saved ? 'Saved' : 'Save'}>
+          <ActionButton onPress={() => setPickerItem(current.id)} label={saved ? t('Saved') : t('Save')}>
             <Icon
               ios={saved ? 'bookmark.fill' : 'bookmark'}
               android={saved ? 'bookmark' : 'bookmark_border'}
@@ -298,13 +326,14 @@ export default function ViewerScreen() {
           </ActionButton>
         </View>
       </SafeAreaView>
+      )}
 
       <TextPrompt
         visible={editingNote}
-        title="Private note"
-        placeholder="What do you remember about this moment?"
+        title={t('Private note')}
+        placeholder={t('What do you remember about this moment?')}
         initialValue={note?.text}
-        submitLabel="Save note"
+        submitLabel={t('Save note')}
         multiline
         onClose={() => setEditingNote(false)}
         onSubmit={(text) => {
@@ -313,10 +342,10 @@ export default function ViewerScreen() {
       />
       <TextPrompt
         visible={renaming}
-        title="Name"
-        placeholder="Give it a name"
+        title={t('Name')}
+        placeholder={t('Give it a name')}
         initialValue={data.titles[current.id]}
-        submitLabel="Save name"
+        submitLabel={t('Save name')}
         onClose={() => setRenaming(false)}
         onSubmit={(text) => renameItem(current.id, text)}
       />
@@ -330,28 +359,30 @@ export default function ViewerScreen() {
   );
 }
 
-/** "Another app" mode: the poster frame with a button that hands the video to a player app. */
-function ExternalVideo({ item }: { item: MediaItem }) {
+/** A photo or video that fails to open shows this instead of taking the app down. */
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  const t = useT();
+  console.warn('Viewer error', error);
   return (
-    <View style={styles.fill}>
-      <Image source={{ uri: item.thumbUri }} style={StyleSheet.absoluteFill} contentFit="contain" />
-      <View style={styles.externalCenter}>
-        <Pressable
-          onPress={() => openInPlayer(item).catch((error) => console.warn('Could not open player', error))}
-          accessibilityLabel="Play in another app"
-          style={({ pressed }) => [styles.externalButton, pressed && styles.pressed]}>
-          <Icon ios="play.rectangle.fill" android="open_in_new" size={22} color="#000" />
-          <Text style={styles.externalText}>Play in another app</Text>
+    <View style={[styles.container, styles.externalCenter, styles.errorBox]}>
+      <Icon ios="exclamationmark.triangle" android="error" size={36} color="#fff" />
+      <Text style={styles.title}>{t('Couldn’t open this item')}</Text>
+      <View style={styles.errorActions}>
+        <Pressable onPress={retry} style={({ pressed }) => [styles.externalButton, pressed && styles.pressed]}>
+          <Text style={styles.externalText}>{t('Try again')}</Text>
         </Pressable>
+        <CloseButton />
       </View>
     </View>
   );
 }
 
 function CloseButton() {
+  const t = useT();
   return (
     <Pressable
       onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+      accessibilityLabel={t('Close')}
       hitSlop={Spacing.three}
       style={({ pressed }) => [styles.iconButton, styles.closeButton, pressed && styles.pressed]}>
       <Icon ios="xmark" android="close" size={18} color="#fff" />
@@ -406,10 +437,14 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: 700,
   },
-  slideshowButton: {
-    position: 'absolute',
-    right: Spacing.three + 44,
-    bottom: Spacing.two,
+  errorBox: {
+    gap: Spacing.three,
+    padding: Spacing.four,
+  },
+  errorActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
   },
   hidden: {
     opacity: 0,
@@ -426,12 +461,24 @@ const styles = StyleSheet.create({
     right: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: Spacing.three,
     paddingHorizontal: Spacing.three,
+    paddingTop: Spacing.two,
     paddingBottom: Spacing.two,
     backgroundColor: 'rgba(0,0,0,0.35)',
   },
+  // Same width as the close button side, so the title stays centered.
+  topSide: {
+    width: 36 * 2 + Spacing.two,
+  },
+  topActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: Spacing.two,
+    width: 36 * 2 + Spacing.two,
+  },
   titleBlock: {
+    flex: 1,
     alignItems: 'center',
   },
   title: {

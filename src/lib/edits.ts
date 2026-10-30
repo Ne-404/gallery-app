@@ -2,6 +2,7 @@
  * Non-destructive photo edits. Originals are never modified; edits are stored per item
  * and applied at render time with style filters, overlays, transforms and text layers.
  */
+import type { TKey } from '@/lib/i18n';
 
 export type FilterId = 'normal' | 'vivid' | 'warm' | 'cool' | 'fade' | 'noir' | 'retro' | 'drama';
 export type AdjustKey =
@@ -97,7 +98,7 @@ export function normalizeEdit(saved: Partial<Edit> & { aspect?: unknown }): Edit
 
 type Preset = Partial<Record<AdjustKey, number>> & { grayscale?: number; sepia?: number };
 
-export const Filters: { id: FilterId; label: string; preset: Preset }[] = [
+export const Filters: { id: FilterId; label: TKey; preset: Preset }[] = [
   { id: 'normal', label: 'Normal', preset: {} },
   { id: 'vivid', label: 'Vivid', preset: { contrast: 0.2, saturation: 0.45 } },
   { id: 'warm', label: 'Golden', preset: { warmth: 0.55, saturation: 0.1, brightness: 0.05 } },
@@ -108,7 +109,7 @@ export const Filters: { id: FilterId; label: string; preset: Preset }[] = [
   { id: 'drama', label: 'Drama', preset: { contrast: 0.5, saturation: -0.2, brightness: -0.08, vignette: 0.6 } },
 ];
 
-export const Adjustments: { key: AdjustKey; label: string; min: number }[] = [
+export const Adjustments: { key: AdjustKey; label: TKey; min: number }[] = [
   { key: 'brightness', label: 'Brightness', min: -1 },
   { key: 'contrast', label: 'Contrast', min: -1 },
   { key: 'highlights', label: 'Highlights', min: -1 },
@@ -122,7 +123,7 @@ export const Adjustments: { key: AdjustKey; label: string; min: number }[] = [
 ];
 
 /** Crop presets; `null` ratio is free-form, `0` keeps the photo's own shape. */
-export const Aspects: { id: string; label: string; ratio: number | null }[] = [
+export const Aspects: { id: string; label: TKey; ratio: number | null }[] = [
   { id: 'free', label: 'Free', ratio: null },
   { id: 'original', label: 'Original', ratio: 0 },
   { id: '1:1', label: 'Square', ratio: 1 },
@@ -133,7 +134,7 @@ export const Aspects: { id: string; label: string; ratio: number | null }[] = [
 
 export const TextColors = ['#FFFFFF', '#111111', '#FF3B5C', '#FFD23F', '#3EC6F0', '#2BB673', '#8E5CF7'];
 
-export const TextStyles: { id: TextStyleId; label: string }[] = [
+export const TextStyles: { id: TextStyleId; label: TKey }[] = [
   { id: 'classic', label: 'Classic' },
   { id: 'strong', label: 'Strong' },
   { id: 'box', label: 'Label' },

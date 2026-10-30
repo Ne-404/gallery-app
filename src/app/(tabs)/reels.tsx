@@ -11,6 +11,7 @@ import { Spacing } from '@/constants/theme';
 import { useAccent, useGallery } from '@/hooks/use-gallery';
 import { useTheme } from '@/hooks/use-theme';
 import { formatDuration } from '@/lib/dates';
+import { useT } from '@/lib/i18n';
 
 type Sort = 'newest' | 'longest';
 
@@ -19,6 +20,7 @@ export default function VideosScreen() {
   const { data, scoped } = useGallery();
   const accent = useAccent();
   const theme = useTheme();
+  const t = useT();
   const [sort, setSort] = useState<Sort>('newest');
   const videos = scoped('video');
   const sorted = sort === 'longest' ? [...videos].sort((a, b) => (b.duration ?? 0) - (a.duration ?? 0)) : videos;
@@ -27,8 +29,8 @@ export default function VideosScreen() {
   const header = (
     <View style={styles.header}>
       <ThemedText type="small" themeColor="textSecondary">
-        {videos.length} {videos.length === 1 ? 'video' : 'videos'}
-        {total > 0 ? ` · ${formatDuration(total)} total` : ''}
+        {t.n(videos.length, '{n} video', '{n} videos')}
+        {total > 0 ? ` · ${t('{duration} total', { duration: formatDuration(total) })}` : ''}
       </ThemedText>
       <View style={styles.sorts}>
         {(['newest', 'longest'] as Sort[]).map((option) => {
@@ -36,7 +38,7 @@ export default function VideosScreen() {
           return (
             <Pressable
               key={option}
-              accessibilityLabel={`Sort by ${option}`}
+              accessibilityLabel={option === 'newest' ? t('Sort by newest') : t('Sort by longest')}
               onPress={() => {
                 setSort(option);
               }}
@@ -46,7 +48,7 @@ export default function VideosScreen() {
                 active && { borderColor: accent },
               ]}>
               <ThemedText type="smallBold" style={{ color: active ? accent : theme.textSecondary }}>
-                {option === 'newest' ? 'Newest' : 'Longest'}
+                {option === 'newest' ? t('Newest') : t('Longest')}
               </ThemedText>
             </Pressable>
           );
@@ -58,7 +60,7 @@ export default function VideosScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-        <AppBar title="Videos" />
+        <AppBar title={t('Videos')} />
         <MediaGrid
           key={sort}
           items={sorted}
@@ -71,7 +73,7 @@ export default function VideosScreen() {
             <View style={styles.empty}>
               <Icon ios="video" android="videocam" size={40} color={theme.textSecondary} />
               <ThemedText themeColor="textSecondary" style={styles.center}>
-                No videos in your library yet.
+                {t('No videos in your library yet.')}
               </ThemedText>
             </View>
           }

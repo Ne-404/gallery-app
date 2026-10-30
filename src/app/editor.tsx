@@ -9,6 +9,7 @@ import { Slider } from '@/components/slider';
 import { TextPrompt } from '@/components/text-prompt';
 import { Spacing } from '@/constants/theme';
 import { useAccent, useGallery } from '@/hooks/use-gallery';
+import { dirProps, dirStyle } from '@/lib/direction';
 import {
   Adjustments,
   aspectRatio,
@@ -30,6 +31,7 @@ import {
   type TextLayer,
   AUTO_ENHANCE,
 } from '@/lib/edits';
+import { useT, type TKey } from '@/lib/i18n';
 import { COPY_MARK, copyItem, setEdit } from '@/lib/user-data';
 import { showToast } from '@/lib/toast';
 import { useVaultUnlocked } from '@/lib/vault';
@@ -38,7 +40,7 @@ type Tool = 'filters' | 'adjust' | 'crop' | 'draw' | 'text';
 
 const TOOLS: {
   id: Tool;
-  label: string;
+  label: TKey;
   ios: 'camera.filters' | 'slider.horizontal.3' | 'crop.rotate' | 'pencil.tip' | 'textformat';
   android: 'filter_vintage' | 'tune' | 'crop' | 'draw' | 'title';
 }[] = [
@@ -49,7 +51,7 @@ const TOOLS: {
   { id: 'text', label: 'Text', ios: 'textformat', android: 'title' },
 ];
 
-const BRUSHES: { id: Stroke['kind']; label: string }[] = [
+const BRUSHES: { id: Stroke['kind']; label: TKey }[] = [
   { id: 'pen', label: 'Pen' },
   { id: 'marker', label: 'Marker' },
   { id: 'neon', label: 'Neon' },
@@ -64,6 +66,7 @@ export default function EditorScreen() {
   const { itemsById, data, isVaulted } = useGallery();
   const vaultUnlocked = useVaultUnlocked();
   const accent = useAccent();
+  const t = useT();
   const item = itemsById.get(id);
   const [draft, setDraft] = useState<Edit>(() => data.edits[id] ?? DEFAULT_EDIT);
   const [tool, setTool] = useState<Tool>('filters');
@@ -80,7 +83,7 @@ export default function EditorScreen() {
 
   const update = (patch: Partial<Edit>) => setDraft((d) => ({ ...d, ...patch }));
   const updateText = (layerId: string, patch: Partial<TextLayer>) =>
-    setDraft((d) => ({ ...d, texts: d.texts.map((t) => (t.id === layerId ? { ...t, ...patch } : t)) }));
+    setDraft((d) => ({ ...d, texts: d.texts.map((layer) => (layer.id === layerId ? { ...layer, ...patch } : layer)) }));
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
   // Editing an original saves a new edited copy next to it; editing a copy updates it.
   const isCopy = item.id.includes(COPY_MARK);
@@ -88,7 +91,7 @@ export default function EditorScreen() {
     if (isCopy) setEdit(item.id, draft);
     else if (isEdited(draft)) {
       setEdit(copyItem(item.id), draft);
-      showToast('Saved as a new copy. The original is unchanged.');
+      showToast(t('Saved as a new copy. The original is unchanged.'));
     }
     close();
   };
@@ -131,7 +134,7 @@ export default function EditorScreen() {
     update({ texts: [...draft.texts, layer] });
     setSelectedText(layer.id);
   };
-  const selected = draft.texts.find((t) => t.id === selectedText);
+  const selected = draft.texts.find((layer) => layer.id === selectedText);
   const adjustment = Adjustments.find((a) => a.key === adjusting)!;
   const interactive = tool === 'crop' || tool === 'text' || tool === 'draw';
 
@@ -139,12 +142,12 @@ export default function EditorScreen() {
     <View style={styles.container}>
       <SafeAreaView edges={['top']} style={styles.topBar}>
         <Pressable onPress={close} hitSlop={8} style={styles.topButton}>
-          <Text style={styles.topText}>Cancel</Text>
+          <Text style={styles.topText}>{t('Cancel')}</Text>
         </Pressable>
-        <Text style={styles.title}>Edit</Text>
-        <Pressable onPress={save} hitSlop={8} style={styles.topButton} accessibilityLabel={isCopy ? 'Save' : 'Save copy'}>
+        <Text style={styles.title}>{t('Edit')}</Text>
+        <Pressable onPress={save} hitSlop={8} style={styles.topButton} accessibilityLabel={isCopy ? t('Save') : t('Save copy')}>
           <Text style={[styles.topText, styles.bold, styles.right, { color: accent }]}>
-            {isCopy ? 'Save' : 'Save copy'}
+            {isCopy ? t('Save') : t('Save copy')}
           </Text>
         </Pressable>
       </SafeAreaView>
@@ -155,7 +158,8 @@ export default function EditorScreen() {
         onPressIn={() => setComparing(true)}
         onPressOut={() => setComparing(false)}>
         <View
-          style={styles.previewFit}
+          {...dirProps('ltr')}
+          style={[styles.previewFit, dirStyle('ltr')]}
           onLayout={(e) => setArea({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}>
           {frame && (
             <View style={[styles.preview, { left: frame.x, top: frame.y, width: frame.width, height: frame.height }]}>
@@ -208,14 +212,14 @@ export default function EditorScreen() {
         </View>
         <Text style={styles.hint}>
           {tool === 'crop'
-            ? 'Drag the corners to crop, or drag inside to move'
+            ? t('Drag the corners to crop, or drag inside to move')
             : tool === 'text'
               ? draft.texts.length
-                ? 'Drag text to move it · tap selected text to edit'
-                : 'Add a caption to your photo'
+                ? t('Drag text to move it · tap selected text to edit')
+                : t('Add a caption to your photo')
               : comparing
-                ? 'Original'
-                : 'Hold to compare'}
+                ? t('Original')
+                : t('Hold to compare')}
         </Text>
       </Pressable>
 
@@ -231,7 +235,7 @@ export default function EditorScreen() {
                     update({ filter: f.id });
                   }}
                   style={styles.filter}>
-                  <Text style={[styles.filterLabel, isSelected && { color: accent }]}>{f.label}</Text>
+                  <Text style={[styles.filterLabel, isSelected && { color: accent }]}>{t(f.label)}</Text>
                   <EditedImage
                     uri={item.thumbUri}
                     edit={{ ...DEFAULT_EDIT, filter: f.id }}
@@ -247,16 +251,16 @@ export default function EditorScreen() {
         {tool === 'adjust' && (
           <View style={styles.tool}>
             <View style={styles.sliderRow}>
-              <Text style={styles.sliderLabel}>{adjustment.label}</Text>
+              <Text style={styles.sliderLabel}>{t(adjustment.label)}</Text>
               <Text style={styles.sliderValue}>{Math.round(draft[adjusting] * 100)}</Text>
               <Pressable
                 onPress={() => {
                   update(AUTO_ENHANCE);
                 }}
-                accessibilityLabel="Auto enhance"
+                accessibilityLabel={t('Auto enhance')}
                 style={[styles.auto, { borderColor: accent }]}>
                 <Icon ios="wand.and.stars" android="auto_fix_high" size={14} color={accent} />
-                <Text style={[styles.chipText, { color: accent }]}>Auto</Text>
+                <Text style={[styles.chipText, { color: accent }]}>{t('Auto')}</Text>
               </Pressable>
             </View>
             <Slider
@@ -270,7 +274,7 @@ export default function EditorScreen() {
               {Adjustments.map((a) => (
                 <Chip
                   key={a.key}
-                  label={`${a.label}${draft[a.key] !== 0 ? ' •' : ''}`}
+                  label={`${t(a.label)}${draft[a.key] !== 0 ? ' •' : ''}`}
                   selected={a.key === adjusting}
                   color={accent}
                   onPress={() => setAdjusting(a.key)}
@@ -283,14 +287,14 @@ export default function EditorScreen() {
         {tool === 'crop' && (
           <View style={styles.tool}>
             <View style={styles.row}>
-              <ToolButton label="Rotate" onPress={rotate}>
+              <ToolButton label={t('Rotate')} onPress={rotate}>
                 <Icon ios="rotate.right" android="rotate_right" color="#fff" />
               </ToolButton>
-              <ToolButton label="Flip" onPress={flip}>
+              <ToolButton label={t('Flip')} onPress={flip}>
                 <Icon ios="arrow.left.and.right.righttriangle.left.righttriangle.right" android="flip" color="#fff" />
               </ToolButton>
               <ToolButton
-                label="Reset"
+                label={t('Reset')}
                 onPress={() => {
                   update({ crop: FULL_CROP });
                   setAspectId('free');
@@ -299,7 +303,7 @@ export default function EditorScreen() {
               </ToolButton>
             </View>
             <View style={styles.sliderRow}>
-              <Text style={styles.sliderLabel}>Straighten</Text>
+              <Text style={styles.sliderLabel}>{t('Straighten')}</Text>
               <Text style={styles.sliderValue}>{Math.round(draft.straighten)}°</Text>
             </View>
             <Slider
@@ -313,7 +317,7 @@ export default function EditorScreen() {
               {Aspects.map((a) => (
                 <Chip
                   key={a.id}
-                  label={a.label}
+                  label={t(a.label)}
                   selected={aspectId === a.id}
                   color={accent}
                   onPress={() => {
@@ -333,7 +337,7 @@ export default function EditorScreen() {
               {BRUSHES.map((b) => (
                 <Chip
                   key={b.id}
-                  label={b.label}
+                  label={t(b.label)}
                   selected={brush.kind === b.id}
                   color={accent}
                   onPress={() => setBrush((x) => ({ ...x, kind: b.id }))}
@@ -342,7 +346,7 @@ export default function EditorScreen() {
               {TextColors.map((color) => (
                 <Pressable
                   key={color}
-                  accessibilityLabel={`Brush color ${color}`}
+                  accessibilityLabel={t('Brush color {color}', { color })}
                   onPress={() => {
                     setBrush((x) => ({ ...x, color }));
                   }}
@@ -368,10 +372,10 @@ export default function EditorScreen() {
               <Icon ios="circle.fill" android="circle" size={18} color="#aaa" />
             </View>
             <View style={styles.row}>
-              <ToolButton label="Undo" onPress={() => update({ drawings: draft.drawings.slice(0, -1) })}>
+              <ToolButton label={t('Undo')} onPress={() => update({ drawings: draft.drawings.slice(0, -1) })}>
                 <Icon ios="arrow.uturn.backward" android="undo" color="#fff" />
               </ToolButton>
-              <ToolButton label="Clear" onPress={() => update({ drawings: [] })}>
+              <ToolButton label={t('Clear')} onPress={() => update({ drawings: [] })}>
                 <Icon ios="trash" android="delete" color="#fff" />
               </ToolButton>
             </View>
@@ -386,7 +390,7 @@ export default function EditorScreen() {
                   {TextColors.map((color) => (
                     <Pressable
                       key={color}
-                      accessibilityLabel={`Text color ${color}`}
+                      accessibilityLabel={t('Text color {color}', { color })}
                       onPress={() => {
                         updateText(selected.id, { color });
                       }}
@@ -399,13 +403,13 @@ export default function EditorScreen() {
                   ))}
                 </ScrollView>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-                  {TextStyles.map((s) => (
+                  {TextStyles.map((style) => (
                     <Chip
-                      key={s.id}
-                      label={s.label}
-                      selected={selected.style === s.id}
+                      key={style.id}
+                      label={t(style.label)}
+                      selected={selected.style === style.id}
                       color={accent}
-                      onPress={() => updateText(selected.id, { style: s.id })}
+                      onPress={() => updateText(selected.id, { style: style.id })}
                     />
                   ))}
                 </ScrollView>
@@ -423,16 +427,16 @@ export default function EditorScreen() {
                   <Icon ios="textformat.size.larger" android="text_increase" size={18} color="#aaa" />
                 </View>
                 <View style={styles.row}>
-                  <ToolButton label="Edit" onPress={() => setPrompt({ layerId: selected.id })}>
+                  <ToolButton label={t('Edit')} onPress={() => setPrompt({ layerId: selected.id })}>
                     <Icon ios="pencil" android="edit" color="#fff" />
                   </ToolButton>
-                  <ToolButton label="Add" onPress={() => setPrompt({ layerId: null })}>
+                  <ToolButton label={t('Add')} onPress={() => setPrompt({ layerId: null })}>
                     <Icon ios="plus" android="add" color="#fff" />
                   </ToolButton>
                   <ToolButton
-                    label="Delete"
+                    label={t('Delete')}
                     onPress={() => {
-                      update({ texts: draft.texts.filter((t) => t.id !== selected.id) });
+                      update({ texts: draft.texts.filter((layer) => layer.id !== selected.id) });
                       setSelectedText(null);
                     }}>
                     <Icon ios="trash" android="delete" color="#FF6B6B" />
@@ -442,26 +446,26 @@ export default function EditorScreen() {
             ) : (
               <Pressable
                 onPress={() => setPrompt({ layerId: null })}
-                accessibilityLabel="Add text"
+                accessibilityLabel={t('Add text')}
                 style={({ pressed }) => [styles.addText, { backgroundColor: accent }, pressed && styles.pressed]}>
                 <Icon ios="textformat" android="title" color="#fff" />
-                <Text style={[styles.chipText, styles.bold]}>Add text</Text>
+                <Text style={[styles.chipText, styles.bold]}>{t('Add text')}</Text>
               </Pressable>
             )}
           </View>
         )}
 
         <View style={styles.tools}>
-          {TOOLS.map((t) => (
+          {TOOLS.map((option) => (
             <Pressable
-              key={t.id}
-              accessibilityLabel={`${t.label} tool`}
+              key={option.id}
+              accessibilityLabel={t('{name} tool', { name: t(option.label) })}
               onPress={() => {
-                setTool(t.id);
+                setTool(option.id);
               }}
               style={styles.toolTab}>
-              <Icon ios={t.ios} android={t.android} size={22} color={tool === t.id ? accent : '#aaa'} />
-              <Text style={[styles.toolLabel, tool === t.id && { color: accent }]}>{t.label}</Text>
+              <Icon ios={option.ios} android={option.android} size={22} color={tool === option.id ? accent : '#aaa'} />
+              <Text style={[styles.toolLabel, tool === option.id && { color: accent }]}>{t(option.label)}</Text>
             </Pressable>
           ))}
           {isEdited(draft) && (
@@ -473,7 +477,7 @@ export default function EditorScreen() {
               }}
               style={styles.toolTab}>
               <Icon ios="arrow.uturn.backward" android="undo" size={22} color="#aaa" />
-              <Text style={styles.toolLabel}>Reset</Text>
+              <Text style={styles.toolLabel}>{t('Reset')}</Text>
             </Pressable>
           )}
         </View>
@@ -481,10 +485,10 @@ export default function EditorScreen() {
 
       <TextPrompt
         visible={prompt !== null}
-        title={prompt?.layerId ? 'Edit text' : 'Add text'}
-        placeholder="Say something about this moment"
-        initialValue={draft.texts.find((t) => t.id === prompt?.layerId)?.text}
-        submitLabel={prompt?.layerId ? 'Update' : 'Add'}
+        title={prompt?.layerId ? t('Edit text') : t('Add text')}
+        placeholder={t('Say something about this moment')}
+        initialValue={draft.texts.find((layer) => layer.id === prompt?.layerId)?.text}
+        submitLabel={prompt?.layerId ? t('Update') : t('Add')}
         onClose={() => setPrompt(null)}
         onSubmit={(text) => {
           const layerId = prompt?.layerId;
@@ -493,7 +497,7 @@ export default function EditorScreen() {
           } else if (text.trim()) {
             updateText(layerId, { text: text.trim() });
           } else {
-            update({ texts: draft.texts.filter((t) => t.id !== layerId) });
+            update({ texts: draft.texts.filter((layer) => layer.id !== layerId) });
             setSelectedText(null);
           }
         }}
@@ -818,6 +822,8 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     gap: Spacing.two,
   },
+  // Crop handles, strokes and captions are placed in photo coordinates, so this stays
+  // left-to-right even in Arabic.
   previewFit: {
     flex: 1,
   },

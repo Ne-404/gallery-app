@@ -6,6 +6,7 @@ import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useT } from '@/lib/i18n';
 import { openSidePanel } from '@/lib/ui';
 
 type AppBarProps = {
@@ -20,11 +21,12 @@ type AppBarProps = {
 /** Material 3 style top app bar. */
 export function AppBar({ title, leading = 'menu', brand, actions }: AppBarProps) {
   const theme = useTheme();
+  const t = useT();
   return (
     <View style={styles.bar}>
       {leading && (
         <IconButton
-          label={leading === 'menu' ? 'Open menu' : 'Back'}
+          label={leading === 'menu' ? t('Open menu') : leading === 'close' ? t('Close') : t('Back')}
           onPress={
             leading === 'menu'
               ? openSidePanel
@@ -41,8 +43,7 @@ export function AppBar({ title, leading = 'menu', brand, actions }: AppBarProps)
           styles.title,
           brand && styles.brand,
           theme.brutal && styles.brutalTitle,
-          theme.serif && styles.gothicTitle,
-          theme.retro && styles.retroTitle,
+          theme.serif && styles.serifTitle,
         ]}>
         {title}
       </ThemedText>
@@ -99,18 +100,12 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: -0.5,
   },
-  gothicTitle: {
+  serifTitle: {
     fontFamily: Fonts.serif,
     fontStyle: 'normal',
     fontWeight: 600,
     textTransform: 'uppercase',
     letterSpacing: 2,
-  },
-  retroTitle: {
-    fontFamily: Fonts.retro,
-    fontStyle: 'normal',
-    fontWeight: 700,
-    letterSpacing: 0,
   },
   actions: {
     flexDirection: 'row',

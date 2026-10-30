@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
 
+import { t, tn } from '@/lib/i18n';
 import { isAndroidExpoGo } from '@/lib/platform';
 import { updateSettings, userData } from '@/lib/user-data';
 
@@ -48,7 +49,7 @@ export function configureNotifications() {
   });
   if (Platform.OS === 'android') {
     Notifications.setNotificationChannelAsync(CHANNEL_ID, {
-      name: 'Memories & challenges',
+      name: t('Memories & challenges'),
       importance: Notifications.AndroidImportance.DEFAULT,
     });
   }
@@ -103,10 +104,14 @@ export async function syncReminders(memoryYearsAgo: number | null) {
   if (memoryReminders) {
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: '✨ Memories',
+        title: t('✨ Memories'),
         body: memoryYearsAgo
-          ? `Look what you captured on this day ${memoryYearsAgo} ${memoryYearsAgo === 1 ? 'year' : 'years'} ago...`
-          : 'Take a minute to relive this week in your gallery.',
+          ? tn(
+              memoryYearsAgo,
+              'Look what you captured on this day {n} year ago...',
+              'Look what you captured on this day {n} years ago...'
+            )
+          : t('Take a minute to relive this week in your gallery.'),
         data: { url: '/stories' } satisfies NotificationData,
       },
       trigger: {
@@ -121,8 +126,8 @@ export async function syncReminders(memoryYearsAgo: number | null) {
   if (challengeReminders) {
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: 'Today in your gallery',
-        body: 'Review what you captured today and check in on your photo challenge.',
+        title: t('Today in your gallery'),
+        body: t('Review what you captured today and check in on your photo challenge.'),
         data: { url: '/insights' } satisfies NotificationData,
       },
       trigger: {
@@ -142,8 +147,8 @@ export async function notifyMilestone(title: string, reward: string) {
   if (!granted) return false;
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: '🏆 Challenge complete!',
-      body: `${title}: you unlocked the ${reward}.`,
+      title: t('🏆 Challenge complete!'),
+      body: t('{title}: you unlocked the {reward}.', { title, reward }),
       data: { url: '/insights' } satisfies NotificationData,
     },
     trigger: null,
